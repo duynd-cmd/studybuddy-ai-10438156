@@ -1,1 +1,13 @@
 project_id = "tslyqspazfsipytuultj"
+
+[functions.generate-study-plan]
+verify_jwt = false
+
+[functions.scriba-chat]
+verify_jwt = false
+
+[functions.search-resources]
+verify_jwt = false
+
+[functions.ai-notes-tool]
+verify_jwt = false
