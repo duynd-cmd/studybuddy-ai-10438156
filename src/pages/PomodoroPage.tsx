@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play, Pause, RotateCcw, Coffee } from "lucide-react";
+import { Play, Pause, RotateCcw, Coffee, Clock } from "lucide-react";
 import { AnimatedSection } from "@/components/AnimatedSection";
 import { toast } from "sonner";
 
@@ -25,99 +25,61 @@ export default function PomodoroPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [subject, setSubject] = useState("");
   const [completedFocus, setCompletedFocus] = useState(0);
-  const sessionIdRef = useRef<string | null>(null);
 
   const total = DURATIONS[sessionType];
   const progress = ((total - timeLeft) / total) * 100;
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
 
-  // Warn before leaving during focus
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isRunning && sessionType === "focus") {
-        e.preventDefault();
-        e.returnValue = "";
-      }
+      if (isRunning && sessionType === "focus") { e.preventDefault(); e.returnValue = ""; }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [isRunning, sessionType]);
 
-  // Timer tick
-  useEffect(() => {
-    if (!isRunning) return;
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          handleComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isRunning]);
-
   const handleComplete = useCallback(async () => {
     setIsRunning(false);
     if (sessionType === "focus" && user) {
-      // Log session
       await supabase.from("pomodoro_sessions").insert({
-        user_id: user.id,
-        subject: subject || null,
-        duration_minutes: DURATIONS.focus / 60,
-        session_type: "focus",
+        user_id: user.id, subject: subject || null,
+        duration_minutes: DURATIONS.focus / 60, session_type: "focus",
         completed_at: new Date().toISOString(),
       });
       queryClient.invalidateQueries({ queryKey: ["pomodoro-today", user.id] });
       queryClient.invalidateQueries({ queryKey: ["pomodoro-stats", user.id] });
-
       const newCount = completedFocus + 1;
       setCompletedFocus(newCount);
       toast.success("Phiên tập trung hoàn thành! 🎉");
-
-      // Auto switch to break
-      if (newCount % 4 === 0) {
-        setSessionType("long_break");
-        setTimeLeft(DURATIONS.long_break);
-      } else {
-        setSessionType("short_break");
-        setTimeLeft(DURATIONS.short_break);
-      }
+      if (newCount % 4 === 0) { setSessionType("long_break"); setTimeLeft(DURATIONS.long_break); }
+      else { setSessionType("short_break"); setTimeLeft(DURATIONS.short_break); }
     } else {
       toast.success("Nghỉ ngơi xong! Tiếp tục nào 💪");
-      setSessionType("focus");
-      setTimeLeft(DURATIONS.focus);
+      setSessionType("focus"); setTimeLeft(DURATIONS.focus);
     }
   }, [sessionType, user, subject, completedFocus, queryClient]);
 
-  const toggleTimer = () => setIsRunning(!isRunning);
+  useEffect(() => {
+    if (!isRunning) return;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) { clearInterval(interval); handleComplete(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning, handleComplete]);
 
-  const resetTimer = () => {
-    setIsRunning(false);
-    setTimeLeft(DURATIONS[sessionType]);
-  };
+  const switchSession = (type: SessionType) => { setIsRunning(false); setSessionType(type); setTimeLeft(DURATIONS[type]); };
 
-  const switchSession = (type: SessionType) => {
-    setIsRunning(false);
-    setSessionType(type);
-    setTimeLeft(DURATIONS[type]);
-  };
-
-  // Today's sessions
   const { data: todaySessions } = useQuery({
     queryKey: ["pomodoro-today", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { data } = await supabase
-        .from("pomodoro_sessions")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("created_at", today.toISOString())
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const { data } = await supabase.from("pomodoro_sessions").select("*")
+        .eq("user_id", user.id).gte("created_at", today.toISOString())
         .order("created_at", { ascending: false });
       return data || [];
     },
@@ -137,46 +99,31 @@ export default function PomodoroPage() {
       <AnimatedSection delay={0.1}>
         <Card className="bg-card border-border">
           <CardContent className="p-6 space-y-6">
-            {/* Subject select */}
             <Select value={subject} onValueChange={setSubject}>
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn môn học (tùy chọn)" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Chọn môn học (tùy chọn)" /></SelectTrigger>
               <SelectContent>
-                {(profile?.subjects || []).map((s: string) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
+                {(profile?.subjects || []).map((s: string) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
                 <SelectItem value="other">Khác</SelectItem>
               </SelectContent>
             </Select>
 
-            {/* Session type tabs */}
             <div className="flex gap-2 justify-center">
               {(["focus", "short_break", "long_break"] as SessionType[]).map((t) => (
-                <Button
-                  key={t}
-                  variant={sessionType === t ? "default" : "outline"}
-                  size="sm"
+                <Button key={t} variant={sessionType === t ? "default" : "outline"} size="sm"
                   onClick={() => switchSession(t)}
-                  className={sessionType === t ? "bg-accent text-accent-foreground" : ""}
-                >
-                  {t === "focus" ? "Tập trung" : t === "short_break" ? "Nghỉ ngắn" : "Nghỉ dài"}
+                  className={sessionType === t ? "bg-accent text-accent-foreground" : ""}>
+                  {LABELS[t]}
                 </Button>
               ))}
             </div>
 
-            {/* Circular timer */}
             <div className="flex justify-center">
               <div className="relative w-52 h-52">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
                   <circle cx="100" cy="100" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
-                  <circle
-                    cx="100" cy="100" r={radius} fill="none"
-                    stroke="hsl(var(--accent))" strokeWidth="8"
+                  <circle cx="100" cy="100" r={radius} fill="none" stroke="hsl(var(--accent))" strokeWidth="8"
                     strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    className="transition-all duration-1000"
-                  />
+                    strokeLinecap="round" className="transition-all duration-1000" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-4xl font-heading font-bold text-foreground">
@@ -187,12 +134,11 @@ export default function PomodoroPage() {
               </div>
             </div>
 
-            {/* Controls */}
             <div className="flex justify-center gap-3">
-              <Button variant="outline" size="icon" onClick={resetTimer}>
+              <Button variant="outline" size="icon" onClick={() => { setIsRunning(false); setTimeLeft(DURATIONS[sessionType]); }}>
                 <RotateCcw className="w-4 h-4" />
               </Button>
-              <Button onClick={toggleTimer} className="bg-accent text-accent-foreground hover:bg-accent/90 px-8">
+              <Button onClick={() => setIsRunning(!isRunning)} className="bg-accent text-accent-foreground hover:bg-accent/90 px-8">
                 {isRunning ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                 {isRunning ? "Tạm dừng" : "Bắt đầu"}
               </Button>
@@ -205,22 +151,15 @@ export default function PomodoroPage() {
         </Card>
       </AnimatedSection>
 
-      {/* Today's history */}
       {todaySessions && todaySessions.length > 0 && (
         <AnimatedSection delay={0.2}>
           <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-base font-heading">Lịch sử hôm nay</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base font-heading">Lịch sử hôm nay</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {todaySessions.map((s: any) => (
                 <div key={s.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
                   <div className="flex items-center gap-2">
-                    {s.session_type === "focus" ? (
-                      <Clock className="w-3.5 h-3.5 text-accent" />
-                    ) : (
-                      <Coffee className="w-3.5 h-3.5 text-muted-foreground" />
-                    )}
+                    {s.session_type === "focus" ? <Clock className="w-3.5 h-3.5 text-accent" /> : <Coffee className="w-3.5 h-3.5 text-muted-foreground" />}
                     <span className="text-foreground">{s.subject || LABELS[s.session_type as SessionType]}</span>
                   </div>
                   <span className="text-muted-foreground">{s.duration_minutes} phút</span>
@@ -233,6 +172,3 @@ export default function PomodoroPage() {
     </div>
   );
 }
-
-// Need Clock import
-import { Clock } from "lucide-react";

@@ -11,7 +11,11 @@ import SignUp from "./pages/SignUp";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import DashboardOverview from "./pages/DashboardOverview";
-import DashboardPlaceholder from "./pages/DashboardPlaceholder";
+import StudyPlanPage from "./pages/StudyPlanPage";
+import ResourcesPage from "./pages/ResourcesPage";
+import ScribaPage from "./pages/ScribaPage";
+import NotesPage from "./pages/NotesPage";
+import PomodoroPage from "./pages/PomodoroPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,11 +41,11 @@ const App = () => (
               }
             >
               <Route index element={<DashboardOverview />} />
-              <Route path="ke-hoach" element={<DashboardPlaceholder />} />
-              <Route path="tai-nguyen" element={<DashboardPlaceholder />} />
-              <Route path="scriba" element={<DashboardPlaceholder />} />
-              <Route path="ghi-chu" element={<DashboardPlaceholder />} />
-              <Route path="pomodoro" element={<DashboardPlaceholder />} />
+              <Route path="ke-hoach" element={<StudyPlanPage />} />
+              <Route path="tai-nguyen" element={<ResourcesPage />} />
+              <Route path="scriba" element={<ScribaPage />} />
+              <Route path="ghi-chu" element={<NotesPage />} />
+              <Route path="pomodoro" element={<PomodoroPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
