@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      flashcards: {
+        Row: {
+          back: string
+          created_at: string
+          front: string
+          id: string
+          plan_id: string
+          user_id: string
+        }
+        Insert: {
+          back: string
+          created_at?: string
+          front: string
+          id?: string
+          plan_id: string
+          user_id: string
+        }
+        Update: {
+          back?: string
+          created_at?: string
+          front?: string
+          id?: string
+          plan_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcards_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "study_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: string | null
@@ -143,6 +178,8 @@ export type Database = {
       scriba_conversations: {
         Row: {
           created_at: string
+          file_content: string | null
+          file_name: string | null
           id: string
           title: string
           updated_at: string
@@ -150,6 +187,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          file_content?: string | null
+          file_name?: string | null
           id?: string
           title?: string
           updated_at?: string
@@ -157,6 +196,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          file_content?: string | null
+          file_name?: string | null
           id?: string
           title?: string
           updated_at?: string
@@ -266,6 +307,44 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "study_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_reviews: {
+        Row: {
+          answers: Json | null
+          created_at: string
+          id: string
+          questions: Json
+          score: number | null
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          answers?: Json | null
+          created_at?: string
+          id?: string
+          questions?: Json
+          score?: number | null
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          answers?: Json | null
+          created_at?: string
+          id?: string
+          questions?: Json
+          score?: number | null
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_reviews_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "study_tasks"
             referencedColumns: ["id"]
           },
         ]
