@@ -9,13 +9,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, grade, subjects, goal } = await req.json();
+    const { messages, grade, subjects, goal, fileContent, fileName } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `Bạn là Scriba, trợ lý học tập AI cho học sinh Việt Nam theo chương trình MOET 2018.
+    let systemPrompt = `Bạn là Scriba, trợ lý học tập AI cho học sinh Việt Nam theo chương trình MOET 2018.
 Thông tin học sinh: Lớp ${grade || "chưa rõ"}, môn: ${(subjects || []).join(", ") || "chưa rõ"}, mục tiêu: ${goal || "chưa rõ"}.
 Hãy trả lời bằng tiếng Việt, giải thích rõ ràng, dễ hiểu. Sử dụng markdown để format câu trả lời.`;
+
+    if (fileContent) {
+      systemPrompt += `\n\nHọc sinh đã tải lên tài liệu "${fileName || "tài liệu"}". Nội dung tài liệu:\n\n${fileContent.slice(0, 30000)}\n\nHãy trả lời câu hỏi dựa trên nội dung tài liệu này.`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

@@ -1,5 +1,4 @@
-# Memory: index.md
-Updated: now
+AI-Mentor design system, routes, database schema, and edge functions reference.
 
 # AI-Mentor Design System
 
@@ -14,30 +13,42 @@ Updated: now
 - **Language**: Vietnamese (vi)
 - **Curriculum**: MOET 2018, Lớp 1–12
 
+## Sidebar Nav Items
+- Tổng quan, Lộ trình, Tài liệu, Scriba AI, Đồng hồ, Ghi chú
+- Active: bg-foreground text-primary-foreground pill
+- User card with avatar initial + grade badge
+
 ## Routes
-- `/` Landing page
-- `/dang-nhap` Sign in
-- `/dang-ky` Sign up
-- `/onboarding` 3-step mandatory onboarding
-- `/dashboard` Protected dashboard with sidebar
-- `/dashboard/ke-hoach` Study Plan (AI generation)
-- `/dashboard/tai-nguyen` Resources (AI search)
-- `/dashboard/scriba` Scriba Chat (streaming)
-- `/dashboard/ghi-chu` Notes (AI tools)
-- `/dashboard/pomodoro` Pomodoro timer
+- `/` Landing, `/dang-nhap` Sign in, `/dang-ky` Sign up, `/onboarding`
+- `/dashboard` Overview, `/dashboard/ke-hoach` Study Plan
+- `/dashboard/tai-nguyen` Resources, `/dashboard/scriba` Scriba AI
+- `/dashboard/ghi-chu` Notes, `/dashboard/pomodoro` Pomodoro
 
 ## Database Tables
 - `profiles`: user_id, grade, subjects[], goal, onboarding_completed
 - `study_plans`: user_id, subject, duration, status
 - `study_tasks`: plan_id, user_id, day_number, title, description, completed
-- `scriba_conversations`: user_id, title
+- `task_reviews`: task_id, user_id, questions(jsonb), answers(jsonb), score
+- `flashcards`: plan_id, user_id, front, back
+- `scriba_conversations`: user_id, title, file_name, file_content
 - `scriba_messages`: conversation_id, user_id, role, content
 - `notes`: user_id, title, subject, content
 - `pomodoro_sessions`: user_id, subject, duration_minutes, session_type
 - `saved_resources`: user_id, title, description, url, subject
 
+## Storage
+- `scriba-files`: private bucket for uploaded documents
+
 ## Edge Functions
 - `generate-study-plan`: tool-calling, gemini-3-flash-preview
-- `scriba-chat`: streaming SSE, gemini-3-flash-preview
+- `scriba-chat`: streaming SSE, gemini-3-flash-preview, accepts fileContent
 - `search-resources`: tool-calling, gemini-3-flash-preview
 - `ai-notes-tool`: non-streaming, gemini-3-flash-preview
+- `review-task`: 2 MCQ questions per task, gemini-3-flash-preview
+- `generate-flashcards`: plan flashcards, gemini-3-flash-preview
+- `parse-document`: uses gemini-2.5-flash to extract text from uploaded files
+
+## Key Behaviors
+- Task completion triggers 2-question AI review dialog (can skip)
+- Plan completion unlocks flashcards generation
+- Scriba requires file upload before chat begins (1 file per conversation)
