@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,11 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, MessageSquare, Loader2 } from "lucide-react";
+import { Plus, Send, MessageSquare, Loader2, Upload, FileText, X } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
 type Msg = { role: "user" | "assistant"; content: string };
+
+const ACCEPTED_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/msword",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.ms-excel",
+  "text/plain",
+];
 
 export default function ScribaPage() {
   const { user } = useAuth();
@@ -21,9 +32,12 @@ export default function ScribaPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [activeConvoFile, setActiveConvoFile] = useState<string | null>(null);
+  const [activeConvoFileContent, setActiveConvoFileContent] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load conversations
   const { data: conversations } = useQuery({
     queryKey: ["scriba-convos", user?.id],
     queryFn: async () => {
@@ -38,16 +52,30 @@ export default function ScribaPage() {
     enabled: !!user,
   });
 
-  // Load messages when conversation changes
+  // Load messages + file info when conversation changes
   useEffect(() => {
-    if (!activeConvoId) { setMessages([]); return; }
+    if (!activeConvoId) {
+      setMessages([]);
+      setActiveConvoFile(null);
+      setActiveConvoFileContent(null);
+      return;
+    }
     (async () => {
-      const { data } = await supabase
-        .from("scriba_messages")
-        .select("role, content")
-        .eq("conversation_id", activeConvoId)
-        .order("created_at", { ascending: true });
-      setMessages((data || []).map((m: any) => ({ role: m.role, content: m.content })));
+      const [messagesRes, convoRes] = await Promise.all([
+        supabase
+          .from("scriba_messages")
+          .select("role, content")
+          .eq("conversation_id", activeConvoId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("scriba_conversations")
+          .select("file_name, file_content")
+          .eq("id", activeConvoId)
+          .single(),
+      ]);
+      setMessages((messagesRes.data || []).map((m: any) => ({ role: m.role, content: m.content })));
+      setActiveConvoFile(convoRes.data?.file_name || null);
+      setActiveConvoFileContent(convoRes.data?.file_content || null);
     })();
   }, [activeConvoId]);
 
@@ -66,7 +94,51 @@ export default function ScribaPage() {
     queryClient.invalidateQueries({ queryKey: ["scriba-convos", user.id] });
     setActiveConvoId(data.id);
     setMessages([]);
+    setActiveConvoFile(null);
+    setActiveConvoFileContent(null);
   };
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!user || !activeConvoId) return;
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      toast.error("Định dạng file không được hỗ trợ. Hãy tải PDF, Word, PowerPoint, Excel hoặc TXT.");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("File quá lớn (tối đa 20MB)");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const filePath = `${user.id}/${activeConvoId}/${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("scriba-files")
+        .upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      // Parse document
+      const { data, error } = await supabase.functions.invoke("parse-document", {
+        body: { filePath, conversationId: activeConvoId },
+      });
+      if (error) throw error;
+
+      setActiveConvoFile(data.fileName || file.name);
+      setActiveConvoFileContent(data.text || "");
+      queryClient.invalidateQueries({ queryKey: ["scriba-convos", user.id] });
+      toast.success(`Đã tải lên: ${file.name}`);
+    } catch (e: any) {
+      toast.error(e.message || "Lỗi tải file");
+    } finally {
+      setUploading(false);
+    }
+  }, [user, activeConvoId, queryClient]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  }, [handleFileUpload]);
 
   const sendMessage = async () => {
     if (!input.trim() || isStreaming || !user || !activeConvoId) return;
@@ -76,7 +148,6 @@ export default function ScribaPage() {
     setInput("");
     setIsStreaming(true);
 
-    // Save user message
     await supabase.from("scriba_messages").insert({
       conversation_id: activeConvoId,
       user_id: user.id,
@@ -84,7 +155,6 @@ export default function ScribaPage() {
       content: userMsg.content,
     });
 
-    // Update conversation title from first message
     if (messages.length === 0) {
       await supabase.from("scriba_conversations").update({
         title: userMsg.content.slice(0, 50),
@@ -106,6 +176,8 @@ export default function ScribaPage() {
           grade: profile?.grade,
           subjects: profile?.subjects,
           goal: profile?.goal,
+          fileContent: activeConvoFileContent || undefined,
+          fileName: activeConvoFile || undefined,
         }),
       });
 
@@ -149,7 +221,6 @@ export default function ScribaPage() {
         }
       }
 
-      // Save assistant message
       if (assistantContent) {
         await supabase.from("scriba_messages").insert({
           conversation_id: activeConvoId,
@@ -165,6 +236,8 @@ export default function ScribaPage() {
       setIsStreaming(false);
     }
   };
+
+  const hasFile = !!activeConvoFile;
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4">
@@ -191,6 +264,16 @@ export default function ScribaPage() {
 
       {/* Chat area */}
       <Card className="flex-1 flex flex-col bg-card border-border">
+        {/* File badge */}
+        {activeConvoId && hasFile && (
+          <div className="px-4 pt-3 pb-0">
+            <div className="inline-flex items-center gap-1.5 bg-accent/15 text-foreground text-xs px-2.5 py-1 rounded">
+              <FileText className="w-3 h-3" />
+              {activeConvoFile}
+            </div>
+          </div>
+        )}
+
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
           {!activeConvoId ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -199,17 +282,56 @@ export default function ScribaPage() {
                 <p>Chọn hoặc tạo cuộc trò chuyện mới</p>
               </div>
             </div>
+          ) : !hasFile ? (
+            /* File upload prompt */
+            <div className="flex items-center justify-center h-full">
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                className="border-2 border-dashed border-border rounded-lg p-8 text-center max-w-sm w-full hover:border-accent/50 transition-colors"
+              >
+                {uploading ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                    <p className="text-sm text-muted-foreground">Đang xử lý tài liệu...</p>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground mb-1">Tải lên tài liệu để bắt đầu</p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      PDF, Word, PowerPoint, Excel hoặc TXT (tối đa 20MB)
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Chọn file
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.docx,.pptx,.xlsx,.doc,.ppt,.xls,.txt"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
           ) : messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p>Hãy đặt câu hỏi cho Scriba!</p>
+              <p>Tài liệu đã sẵn sàng. Hãy đặt câu hỏi cho Scriba!</p>
             </div>
           ) : (
             messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm ${
-                  m.role === "user"
-                    ? "bg-accent/20 text-foreground"
-                    : "bg-secondary text-foreground"
+                  m.role === "user" ? "bg-accent/20 text-foreground" : "bg-secondary text-foreground"
                 }`}>
                   {m.role === "assistant" ? (
                     <div className="prose prose-sm max-w-none">
@@ -223,13 +345,13 @@ export default function ScribaPage() {
           <div ref={messagesEndRef} />
         </CardContent>
 
-        {activeConvoId && (
+        {activeConvoId && hasFile && (
           <div className="p-4 border-t border-border">
             <div className="flex gap-2">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Nhập câu hỏi..."
+                placeholder="Hỏi về tài liệu..."
                 className="min-h-[44px] max-h-32 resize-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }

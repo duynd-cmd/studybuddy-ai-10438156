@@ -1,7 +1,8 @@
-import { LayoutDashboard, CalendarDays, BookOpen, FileText, StickyNote, Clock, LogOut } from "lucide-react";
+import { LayoutDashboard, BookOpen, Search, Brain, Clock, FileText, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import {
   Sidebar,
   SidebarContent,
@@ -12,54 +13,105 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Kế hoạch học tập", url: "/dashboard/ke-hoach", icon: CalendarDays },
-  { title: "Tài nguyên", url: "/dashboard/tai-nguyen", icon: BookOpen },
-  { title: "Scriba", url: "/dashboard/scriba", icon: FileText },
-  { title: "Ghi chú", url: "/dashboard/ghi-chu", icon: StickyNote },
-  { title: "Pomodoro", url: "/dashboard/pomodoro", icon: Clock },
+  { title: "Lộ trình", url: "/dashboard/ke-hoach", icon: BookOpen },
+  { title: "Tài liệu", url: "/dashboard/tai-nguyen", icon: Search },
+  { title: "Scriba AI", url: "/dashboard/scriba", icon: Brain },
+  { title: "Đồng hồ", url: "/dashboard/pomodoro", icon: Clock },
+  { title: "Ghi chú", url: "/dashboard/ghi-chu", icon: FileText },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { data: profile } = useProfile();
+
+  const displayName = user?.email?.split("@")[0] || "Học sinh";
+  const initial = displayName.charAt(0).toUpperCase();
+  const gradeLabel = profile?.grade ? `Lớp ${profile.grade}` : "";
 
   return (
     <Sidebar collapsible="icon">
+      <SidebarHeader className="p-4">
+        {!collapsed ? (
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded bg-accent flex items-center justify-center">
+              <Brain className="w-5 h-5 text-accent-foreground" />
+            </div>
+            <span className="font-heading font-bold text-base text-foreground">AI Mentor</span>
+          </div>
+        ) : (
+          <div className="w-8 h-8 rounded bg-accent flex items-center justify-center mx-auto">
+            <Brain className="w-5 h-5 text-accent-foreground" />
+          </div>
+        )}
+
+        {/* User card */}
+        {!collapsed && (
+          <div className="mt-4 rounded-lg bg-secondary/60 p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-sm shrink-0">
+                {initial}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">Xin chào, {displayName}</p>
+                {gradeLabel && (
+                  <span className="inline-block mt-0.5 text-[10px] font-medium bg-accent/30 text-foreground px-1.5 py-0.5 rounded">
+                    {gradeLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </SidebarHeader>
+
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="font-heading font-bold text-base px-4u py-3u">
-            {!collapsed && "AI-Mentor"}
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground px-4 mb-1">
+            {!collapsed && "Công cụ học tập"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/dashboard"}
-                      className="hover:bg-accent/10 transition-colors"
-                      activeClassName="bg-accent/20 text-foreground font-medium"
-                    >
-                      <item.icon className="mr-2 h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navItems.map((item) => {
+                const isActive =
+                  item.url === "/dashboard"
+                    ? location.pathname === "/dashboard"
+                    : location.pathname.startsWith(item.url);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        end={item.url === "/dashboard"}
+                        className={`transition-colors rounded-lg ${
+                          isActive
+                            ? "bg-foreground text-primary-foreground font-medium"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        }`}
+                        activeClassName=""
+                      >
+                        <item.icon className="mr-2 h-4 w-4 shrink-0" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-2u">
+
+      <SidebarFooter className="p-2">
         <Button
           variant="ghost"
           size={collapsed ? "icon" : "default"}

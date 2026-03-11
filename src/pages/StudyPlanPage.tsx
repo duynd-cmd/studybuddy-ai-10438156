@@ -6,11 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatedSection } from "@/components/AnimatedSection";
-import { CalendarDays, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Loader2, Plus, Trash2, Award, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+
+type ReviewQuestion = {
+  question: string;
+  options: string[];
+  correct: number;
+};
 
 export default function StudyPlanPage() {
   const { user } = useAuth();
@@ -20,6 +27,21 @@ export default function StudyPlanPage() {
   const [subject, setSubject] = useState("");
   const [duration, setDuration] = useState("1_week");
   const [generating, setGenerating] = useState(false);
+
+  // Review state
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewTask, setReviewTask] = useState<any>(null);
+  const [reviewQuestions, setReviewQuestions] = useState<ReviewQuestion[]>([]);
+  const [reviewAnswers, setReviewAnswers] = useState<(number | null)[]>([null, null]);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+
+  // Flashcards state
+  const [flashcardsOpen, setFlashcardsOpen] = useState(false);
+  const [flashcards, setFlashcards] = useState<{ front: string; back: string }[]>([]);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [flashcardsLoading, setFlashcardsLoading] = useState(false);
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ["study-plans", user?.id],
@@ -45,7 +67,6 @@ export default function StudyPlanPage() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      // Create plan
       const { data: plan, error: planError } = await supabase
         .from("study_plans")
         .insert({ user_id: user.id, subject, duration, status: "active" })
@@ -53,7 +74,6 @@ export default function StudyPlanPage() {
         .single();
       if (planError) throw planError;
 
-      // Insert tasks
       const tasks = (data.tasks || []).map((t: any) => ({
         plan_id: plan.id,
         user_id: user.id,
@@ -76,13 +96,125 @@ export default function StudyPlanPage() {
     }
   };
 
-  const toggleTask = async (taskId: string, completed: boolean) => {
+  const handleTaskCheck = async (task: any, plan: any) => {
+    if (task.completed) {
+      // Uncheck
+      await supabase.from("study_tasks").update({ completed: false, completed_at: null }).eq("id", task.id);
+      queryClient.invalidateQueries({ queryKey: ["study-plans", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["task-stats", user?.id] });
+      return;
+    }
+    // Open review dialog
+    setReviewTask({ ...task, planSubject: plan.subject });
+    setReviewAnswers([null, null]);
+    setReviewSubmitted(false);
+    setReviewLoading(true);
+    setReviewOpen(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("review-task", {
+        body: {
+          taskTitle: task.title,
+          taskDescription: task.description,
+          grade: profile?.grade,
+          subject: plan.subject,
+        },
+      });
+      if (error) throw error;
+      setReviewQuestions(data.questions || []);
+    } catch (e: any) {
+      toast.error("Không tạo được câu hỏi ôn tập");
+      setReviewOpen(false);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!reviewTask || !user) return;
+    const score = reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0);
+    setReviewSubmitted(true);
+
+    // Save review
+    await supabase.from("task_reviews" as any).insert({
+      task_id: reviewTask.id,
+      user_id: user.id,
+      questions: reviewQuestions,
+      answers: reviewAnswers,
+      score,
+    });
+
+    // Mark task complete
     await supabase.from("study_tasks").update({
-      completed,
-      completed_at: completed ? new Date().toISOString() : null,
-    }).eq("id", taskId);
-    queryClient.invalidateQueries({ queryKey: ["study-plans", user?.id] });
-    queryClient.invalidateQueries({ queryKey: ["task-stats", user?.id] });
+      completed: true,
+      completed_at: new Date().toISOString(),
+    }).eq("id", reviewTask.id);
+
+    queryClient.invalidateQueries({ queryKey: ["study-plans", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["task-stats", user.id] });
+  };
+
+  const skipReview = async () => {
+    if (!reviewTask || !user) return;
+    await supabase.from("study_tasks").update({
+      completed: true,
+      completed_at: new Date().toISOString(),
+    }).eq("id", reviewTask.id);
+    queryClient.invalidateQueries({ queryKey: ["study-plans", user.id] });
+    queryClient.invalidateQueries({ queryKey: ["task-stats", user.id] });
+    setReviewOpen(false);
+  };
+
+  const isPlanComplete = (plan: any) => {
+    const tasks = plan.study_tasks || [];
+    return tasks.length > 0 && tasks.every((t: any) => t.completed);
+  };
+
+  const generateFlashcards = async (plan: any) => {
+    if (!user) return;
+    setFlashcardsLoading(true);
+    setFlashcardsOpen(true);
+    setFlashcardIndex(0);
+    setFlipped(false);
+
+    try {
+      // Check if flashcards already exist
+      const { data: existing } = await supabase
+        .from("flashcards" as any)
+        .select("*")
+        .eq("plan_id", plan.id)
+        .eq("user_id", user.id);
+
+      if (existing && existing.length > 0) {
+        setFlashcards(existing.map((f: any) => ({ front: f.front, back: f.back })));
+        setFlashcardsLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("generate-flashcards", {
+        body: {
+          tasks: plan.study_tasks,
+          subject: plan.subject,
+          grade: profile?.grade,
+        },
+      });
+      if (error) throw error;
+
+      const cards = data.flashcards || [];
+      setFlashcards(cards);
+
+      // Save to DB
+      if (cards.length > 0) {
+        await supabase.from("flashcards" as any).insert(
+          cards.map((c: any) => ({ plan_id: plan.id, user_id: user.id, front: c.front, back: c.back }))
+        );
+      }
+    } catch (e: any) {
+      toast.error("Không tạo được flashcards");
+      setFlashcardsOpen(false);
+    } finally {
+      setFlashcardsLoading(false);
+    }
   };
 
   const deletePlan = async (planId: string) => {
@@ -106,33 +238,22 @@ export default function StudyPlanPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Input
-              placeholder="Nhập môn học / chủ đề (VD: Toán hình học)"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-            />
+            <Input placeholder="Nhập môn học / chủ đề (VD: Toán hình học)" value={subject} onChange={(e) => setSubject(e.target.value)} />
             <Select value={duration} onValueChange={setDuration}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1_week">1 Tuần</SelectItem>
                 <SelectItem value="2_weeks">2 Tuần</SelectItem>
                 <SelectItem value="1_month">1 Tháng</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              onClick={generatePlan}
-              disabled={generating || !subject.trim()}
-              className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
-            >
+            <Button onClick={generatePlan} disabled={generating || !subject.trim()} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
               {generating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Đang tạo...</> : "Tạo kế hoạch AI"}
             </Button>
           </CardContent>
         </Card>
       </AnimatedSection>
 
-      {/* Plans list */}
       {plans?.map((plan: any, i: number) => (
         <AnimatedSection key={plan.id} delay={0.2 + i * 0.05}>
           <Card className="bg-card border-border">
@@ -145,9 +266,16 @@ export default function StudyPlanPage() {
                   {plan.study_tasks?.filter((t: any) => t.completed).length || 0}/{plan.study_tasks?.length || 0} hoàn thành
                 </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => deletePlan(plan.id)}>
-                <Trash2 className="w-4 h-4 text-muted-foreground" />
-              </Button>
+              <div className="flex items-center gap-1">
+                {isPlanComplete(plan) && (
+                  <Button variant="outline" size="sm" onClick={() => generateFlashcards(plan)} className="text-xs gap-1">
+                    <Award className="w-3.5 h-3.5" /> Flashcards
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" onClick={() => deletePlan(plan.id)}>
+                  <Trash2 className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2">
               {(plan.study_tasks || [])
@@ -156,16 +284,14 @@ export default function StudyPlanPage() {
                   <div key={task.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
                     <Checkbox
                       checked={task.completed}
-                      onCheckedChange={(checked) => toggleTask(task.id, !!checked)}
+                      onCheckedChange={() => handleTaskCheck(task, plan)}
                       className="mt-0.5"
                     />
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium ${task.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
                         Ngày {task.day_number}: {task.title}
                       </p>
-                      {task.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
-                      )}
+                      {task.description && <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>}
                     </div>
                   </div>
                 ))}
@@ -182,6 +308,134 @@ export default function StudyPlanPage() {
           </div>
         </AnimatedSection>
       )}
+
+      {/* Review Dialog */}
+      <Dialog open={reviewOpen} onOpenChange={(open) => { if (!open) setReviewOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Ôn tập: {reviewTask?.title}</DialogTitle>
+          </DialogHeader>
+          {reviewLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Đang tạo câu hỏi...</span>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {reviewQuestions.map((q, qi) => (
+                <div key={qi} className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">{qi + 1}. {q.question}</p>
+                  <div className="space-y-1.5">
+                    {q.options.map((opt, oi) => {
+                      const selected = reviewAnswers[qi] === oi;
+                      const isCorrect = q.correct === oi;
+                      let optClass = "border-border hover:bg-secondary/50";
+                      if (reviewSubmitted) {
+                        if (isCorrect) optClass = "border-green-500 bg-green-50 dark:bg-green-950";
+                        else if (selected && !isCorrect) optClass = "border-destructive bg-red-50 dark:bg-red-950";
+                      } else if (selected) {
+                        optClass = "border-accent bg-accent/10";
+                      }
+                      return (
+                        <button
+                          key={oi}
+                          disabled={reviewSubmitted}
+                          onClick={() => {
+                            const newAnswers = [...reviewAnswers];
+                            newAnswers[qi] = oi;
+                            setReviewAnswers(newAnswers);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${optClass}`}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                {!reviewSubmitted ? (
+                  <>
+                    <Button
+                      onClick={submitReview}
+                      disabled={reviewAnswers.some((a) => a === null)}
+                      className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                    >
+                      Nộp bài
+                    </Button>
+                    <Button variant="ghost" onClick={skipReview} className="text-muted-foreground">
+                      Bỏ qua
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setReviewOpen(false)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                    {reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0)}/{reviewQuestions.length} đúng — Đóng
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Flashcards Dialog */}
+      <Dialog open={flashcardsOpen} onOpenChange={(open) => { if (!open) setFlashcardsOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <Award className="w-5 h-5" /> Flashcards ôn tập
+            </DialogTitle>
+          </DialogHeader>
+          {flashcardsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Đang tạo flashcards...</span>
+            </div>
+          ) : flashcards.length > 0 ? (
+            <div className="space-y-4">
+              <div
+                onClick={() => setFlipped(!flipped)}
+                className="min-h-[160px] rounded-lg border border-border bg-secondary/30 flex items-center justify-center p-6 cursor-pointer hover:shadow-md transition-shadow"
+              >
+                <p className="text-center text-sm font-medium text-foreground">
+                  {flipped ? flashcards[flashcardIndex]?.back : flashcards[flashcardIndex]?.front}
+                </p>
+              </div>
+              <p className="text-xs text-center text-muted-foreground">
+                {flipped ? "Đáp án" : "Câu hỏi"} — Nhấn để lật • {flashcardIndex + 1}/{flashcards.length}
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={flashcardIndex === 0}
+                  onClick={() => { setFlashcardIndex(flashcardIndex - 1); setFlipped(false); }}
+                >
+                  ← Trước
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setFlipped(false); setFlashcardIndex(0); }}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={flashcardIndex === flashcards.length - 1}
+                  onClick={() => { setFlashcardIndex(flashcardIndex + 1); setFlipped(false); }}
+                >
+                  Sau →
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-4">Không có flashcards</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
