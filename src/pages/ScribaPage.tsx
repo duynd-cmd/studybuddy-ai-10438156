@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { Card, CardContent } from "@/components/ui/card";
@@ -329,7 +330,13 @@ export default function ScribaPage() {
             </div>
           ) : (
             messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ type: "spring" as const, stiffness: 400, damping: 28, delay: i * 0.03 }}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              >
                 <div className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm ${
                   m.role === "user" ? "bg-accent/20 text-foreground" : "bg-secondary text-foreground"
                 }`}>
@@ -339,7 +346,7 @@ export default function ScribaPage() {
                     </div>
                   ) : m.content}
                 </div>
-              </div>
+              </motion.div>
             ))
           )}
           <div ref={messagesEndRef} />

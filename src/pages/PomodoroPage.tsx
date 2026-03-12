@@ -123,7 +123,7 @@ export default function PomodoroPage() {
                   <circle cx="100" cy="100" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
                   <circle cx="100" cy="100" r={radius} fill="none" stroke="hsl(var(--accent))" strokeWidth="8"
                     strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round" className="transition-all duration-1000" />
+                    strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.33, 1, 0.68, 1)" }} />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-4xl font-heading font-bold text-foreground">
