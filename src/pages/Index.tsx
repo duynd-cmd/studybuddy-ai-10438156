@@ -118,15 +118,25 @@ export default function Index() {
             </h2>
           </AnimatedSection>
           <div className="relative">
-            <Card className="bg-card border-border shadow-card">
+            <Card className="bg-card border-border shadow-card overflow-hidden">
               <CardContent className="p-10u text-center">
-                <p className="text-body text-foreground mb-6u italic leading-relaxed">
-                  "{testimonials[currentTestimonial].quote}"
-                </p>
-                <p className="font-heading font-semibold text-foreground">
-                  {testimonials[currentTestimonial].name}
-                </p>
-                <p className="text-sm text-muted-foreground">{testimonials[currentTestimonial].grade}</p>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentTestimonial}
+                    initial={{ opacity: 0, x: 30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -30 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                  >
+                    <p className="text-body text-foreground mb-6u italic leading-relaxed">
+                      "{testimonials[currentTestimonial].quote}"
+                    </p>
+                    <p className="font-heading font-semibold text-foreground">
+                      {testimonials[currentTestimonial].name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{testimonials[currentTestimonial].grade}</p>
+                  </motion.div>
+                </AnimatePresence>
               </CardContent>
             </Card>
             <div className="flex justify-center gap-4u mt-6u">
