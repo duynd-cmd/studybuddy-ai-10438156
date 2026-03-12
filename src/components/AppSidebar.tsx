@@ -3,6 +3,7 @@ import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { motion } from "framer-motion";
 import {
   Sidebar,
   SidebarContent,
@@ -26,6 +27,8 @@ const navItems = [
   { title: "Đồng hồ", url: "/dashboard/pomodoro", icon: Clock },
   { title: "Ghi chú", url: "/dashboard/ghi-chu", icon: FileText },
 ];
+
+const spring = { type: "spring" as const, stiffness: 400, damping: 28 };
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -56,7 +59,12 @@ export function AppSidebar() {
 
         {/* User card */}
         {!collapsed && (
-          <div className="mt-4 rounded-lg bg-secondary/60 p-3">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...spring, delay: 0.05 }}
+            className="mt-4 rounded-lg bg-secondary/60 p-3"
+          >
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-accent-foreground font-bold text-sm shrink-0">
                 {initial}
@@ -70,7 +78,7 @@ export function AppSidebar() {
                 )}
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </SidebarHeader>
 
@@ -81,28 +89,36 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {navItems.map((item, index) => {
                 const isActive =
                   item.url === "/dashboard"
                     ? location.pathname === "/dashboard"
                     : location.pathname.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.url}
-                        end={item.url === "/dashboard"}
-                        className={`transition-colors rounded-lg ${
-                          isActive
-                            ? "bg-foreground text-primary-foreground font-medium"
-                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        }`}
-                        activeClassName=""
-                      >
-                        <item.icon className="mr-2 h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
+                    <motion.div
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ ...spring, delay: index * 0.04 }}
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end={item.url === "/dashboard"}
+                          className={`transition-colors rounded-lg ${
+                            isActive
+                              ? "bg-foreground text-primary-foreground font-medium"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          }`}
+                          activeClassName=""
+                        >
+                          <item.icon className="mr-2 h-4 w-4 shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </motion.div>
                   </SidebarMenuItem>
                 );
               })}
@@ -112,15 +128,17 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2">
-        <Button
-          variant="ghost"
-          size={collapsed ? "icon" : "default"}
-          onClick={signOut}
-          className="w-full justify-start text-muted-foreground hover:text-foreground"
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span className="ml-2">Đăng xuất</span>}
-        </Button>
+        <motion.div whileHover={{ x: 4 }} whileTap={{ scale: 0.97 }} transition={spring}>
+          <Button
+            variant="ghost"
+            size={collapsed ? "icon" : "default"}
+            onClick={signOut}
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed && <span className="ml-2">Đăng xuất</span>}
+          </Button>
+        </motion.div>
       </SidebarFooter>
     </Sidebar>
   );
