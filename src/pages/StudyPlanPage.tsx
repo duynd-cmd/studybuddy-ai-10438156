@@ -396,11 +396,32 @@ export default function StudyPlanPage() {
             <div className="space-y-4">
               <div
                 onClick={() => setFlipped(!flipped)}
-                className="min-h-[160px] rounded-lg border border-border bg-secondary/30 flex items-center justify-center p-6 cursor-pointer hover:shadow-md transition-shadow"
+                className="min-h-[160px] rounded-lg border border-border bg-secondary/30 flex items-center justify-center p-6 cursor-pointer"
+                style={{ perspective: "600px" }}
               >
-                <p className="text-center text-sm font-medium text-foreground">
-                  {flipped ? flashcards[flashcardIndex]?.back : flashcards[flashcardIndex]?.front}
-                </p>
+                <div
+                  style={{
+                    transformStyle: "preserve-3d",
+                    transition: "transform 0.5s cubic-bezier(0.33, 1, 0.68, 1)",
+                    transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                    position: "relative",
+                    width: "100%",
+                    minHeight: "120px",
+                  }}
+                >
+                  {/* Front */}
+                  <div style={{ backfaceVisibility: "hidden", position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <p className="text-center text-sm font-medium text-foreground">
+                      {flashcards[flashcardIndex]?.front}
+                    </p>
+                  </div>
+                  {/* Back */}
+                  <div style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <p className="text-center text-sm font-medium text-foreground">
+                      {flashcards[flashcardIndex]?.back}
+                    </p>
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-center text-muted-foreground">
                 {flipped ? "Đáp án" : "Câu hỏi"} — Nhấn để lật • {flashcardIndex + 1}/{flashcards.length}
