@@ -4,10 +4,10 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { AnimatePresence, motion } from "framer-motion";
 
 const pageTransition = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
-  transition: { type: "spring", stiffness: 400, damping: 28 },
+  initial: { opacity: 0, y: 12 } as const,
+  animate: { opacity: 1, y: 0 } as const,
+  exit: { opacity: 0, y: -8 } as const,
+  transition: { type: "spring" as const, stiffness: 400, damping: 28 },
 };
 
 export default function Dashboard() {
