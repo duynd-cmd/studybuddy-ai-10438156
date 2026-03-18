@@ -112,7 +112,14 @@ export default function ScribaPage() {
 
     setUploading(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const originalExt = file.name.includes(".") ? `.${file.name.split(".").pop()?.toLowerCase()}` : "";
+      const baseName = file.name.replace(/\.[^/.]+$/, "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+      const slugBase = baseName
+        .replace(/[^a-zA-Z0-9_-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .toLowerCase();
+      const safeName = `${slugBase || "tai-lieu"}-${Date.now()}${originalExt}`;
       const filePath = `${user.id}/${activeConvoId}/${safeName}`;
       const { error: uploadError } = await supabase.storage
         .from("scriba-files")
