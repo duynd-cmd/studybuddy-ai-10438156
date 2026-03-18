@@ -64,11 +64,9 @@ serve(async (req) => {
             role: "user",
             content: [
               {
-                type: "file",
-                file: {
-                  filename: filePath.split("/").pop(),
-                  content_type: mimeType,
-                  data: base64,
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64}`,
                 },
               },
               {
