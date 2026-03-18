@@ -112,7 +112,8 @@ export default function ScribaPage() {
 
     setUploading(true);
     try {
-      const filePath = `${user.id}/${activeConvoId}/${file.name}`;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `${user.id}/${activeConvoId}/${safeName}`;
       const { error: uploadError } = await supabase.storage
         .from("scriba-files")
         .upload(filePath, file);
