@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -6,11 +7,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MAX_INLINE_FILE_SIZE_BYTES = 12 * 1024 * 1024; // 12MB
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const { filePath, conversationId } = await req.json();
+    if (!filePath || !conversationId) {
+      return new Response(JSON.stringify({ error: "Thiếu filePath hoặc conversationId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -18,18 +28,26 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Create a signed URL instead of downloading the file into memory
-    const { data: signedData, error: signError } = await supabase.storage
+    const { data: fileData, error: downloadError } = await supabase.storage
       .from("scriba-files")
-      .createSignedUrl(filePath, 300); // 5 min expiry
+      .download(filePath);
 
-    if (signError || !signedData?.signedUrl) {
-      throw new Error("Không thể tạo URL file: " + (signError?.message || "unknown"));
+    if (downloadError || !fileData) {
+      throw new Error("Không thể tải file: " + (downloadError?.message || "unknown"));
     }
 
-    const fileUrl = signedData.signedUrl;
+    if (fileData.size > MAX_INLINE_FILE_SIZE_BYTES) {
+      return new Response(
+        JSON.stringify({
+          error: "Tài liệu quá lớn để phân tích trực tiếp. Vui lòng dùng file nhỏ hơn 12MB.",
+        }),
+        {
+          status: 413,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
-    // Determine mime type
     const ext = filePath.split(".").pop()?.toLowerCase() || "";
     const mimeMap: Record<string, string> = {
       pdf: "application/pdf",
@@ -41,9 +59,11 @@ serve(async (req) => {
       xls: "application/vnd.ms-excel",
       txt: "text/plain",
     };
-    const mimeType = mimeMap[ext] || "application/pdf";
+    const mimeType = mimeMap[ext] || "application/octet-stream";
 
-    // Use Gemini with the file URL directly (no base64 in memory)
+    const bytes = new Uint8Array(await fileData.arrayBuffer());
+    const base64 = encodeBase64(bytes);
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -51,7 +71,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           {
             role: "user",
@@ -59,7 +79,7 @@ serve(async (req) => {
               {
                 type: "image_url",
                 image_url: {
-                  url: fileUrl,
+                  url: `data:${mimeType};base64,${base64}`,
                 },
               },
               {
@@ -73,15 +93,32 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const t = await response.text();
-      console.error("AI parse error:", response.status, t);
-      throw new Error("Không thể đọc tài liệu");
+      const raw = await response.text();
+      console.error("AI parse error:", response.status, raw);
+
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "Bạn đang gửi quá nhiều yêu cầu, vui lòng thử lại sau ít phút." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Hệ thống AI đã hết credits, vui lòng nạp thêm để tiếp tục." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: "Không thể đọc tài liệu" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const result = await response.json();
     const extractedText = result.choices?.[0]?.message?.content || "";
 
-    // Update conversation with file content
     const { error: updateError } = await supabase
       .from("scriba_conversations")
       .update({
