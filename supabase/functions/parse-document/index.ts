@@ -18,23 +18,16 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Download file from storage
-    const { data: fileData, error: downloadError } = await supabase.storage
+    // Create a signed URL instead of downloading the file into memory
+    const { data: signedData, error: signError } = await supabase.storage
       .from("scriba-files")
-      .download(filePath);
+      .createSignedUrl(filePath, 300); // 5 min expiry
 
-    if (downloadError || !fileData) {
-      throw new Error("Không thể tải file: " + (downloadError?.message || "unknown"));
+    if (signError || !signedData?.signedUrl) {
+      throw new Error("Không thể tạo URL file: " + (signError?.message || "unknown"));
     }
 
-    // Convert to base64 for AI processing
-    const arrayBuffer = await fileData.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
+    const fileUrl = signedData.signedUrl;
 
     // Determine mime type
     const ext = filePath.split(".").pop()?.toLowerCase() || "";
@@ -48,9 +41,9 @@ serve(async (req) => {
       xls: "application/vnd.ms-excel",
       txt: "text/plain",
     };
-    const mimeType = mimeMap[ext] || "application/octet-stream";
+    const mimeType = mimeMap[ext] || "application/pdf";
 
-    // Use Gemini to extract text from the document
+    // Use Gemini with the file URL directly (no base64 in memory)
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -66,7 +59,7 @@ serve(async (req) => {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:${mimeType};base64,${base64}`,
+                  url: fileUrl,
                 },
               },
               {
@@ -93,7 +86,7 @@ serve(async (req) => {
       .from("scriba_conversations")
       .update({
         file_name: filePath.split("/").pop(),
-        file_content: extractedText.slice(0, 50000), // limit storage
+        file_content: extractedText.slice(0, 50000),
       })
       .eq("id", conversationId);
 
