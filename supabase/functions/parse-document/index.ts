@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // keep safe for edge memory
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const PARSE_PROMPT =
   "Hãy trích xuất TOÀN BỘ nội dung text từ tài liệu này. Giữ nguyên cấu trúc, tiêu đề, danh sách. Trả về dưới dạng plain text có format markdown. Không thêm nhận xét hay giải thích, chỉ nội dung tài liệu.";
 
@@ -27,10 +27,6 @@ function getMimeType(filePath: string) {
   return mimeMap[ext] || "application/octet-stream";
 }
 
-function toUint8Array(a: Uint8Array | ArrayBuffer): Uint8Array {
-  return a instanceof Uint8Array ? a : new Uint8Array(a);
-}
-
 function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
   const out = new Uint8Array(a.length + b.length);
   out.set(a, 0);
@@ -38,7 +34,7 @@ function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
   return out;
 }
 
-function buildGatewayBodyStream(fileBlob: Blob, mimeType: string) {
+function buildGatewayBodyStream(source: ReadableStream<Uint8Array>, mimeType: string) {
   const encoder = new TextEncoder();
   const promptJson = JSON.stringify(PARSE_PROMPT);
 
@@ -49,20 +45,19 @@ function buildGatewayBodyStream(fileBlob: Blob, mimeType: string) {
     async start(controller) {
       controller.enqueue(encoder.encode(prefix));
 
-      const reader = fileBlob.stream().getReader();
+      const reader = source.getReader();
       let carry = new Uint8Array(0);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = toUint8Array(value as Uint8Array | ArrayBuffer);
+        const chunk = value ?? new Uint8Array(0);
         const merged = concatBytes(carry, chunk);
         const processLen = merged.length - (merged.length % 3);
 
         if (processLen > 0) {
-          const processChunk = merged.subarray(0, processLen);
-          controller.enqueue(encoder.encode(encodeBase64(processChunk)));
+          controller.enqueue(encoder.encode(encodeBase64(merged.subarray(0, processLen))));
         }
 
         carry = merged.subarray(processLen);
@@ -102,10 +97,11 @@ serve(async (req) => {
       .createSignedUrl(filePath, 120);
 
     if (signError || !signedData?.signedUrl) {
-      throw new Error("Không thể kiểm tra file: " + (signError?.message || "unknown"));
+      throw new Error("Không thể tạo URL file: " + (signError?.message || "unknown"));
     }
 
-    const headResp = await fetch(signedData.signedUrl, { method: "HEAD" });
+    const fileUrl = signedData.signedUrl;
+    const headResp = await fetch(fileUrl, { method: "HEAD" });
     const contentLength = Number(headResp.headers.get("content-length") ?? "0");
 
     if (contentLength > 0 && contentLength > MAX_FILE_SIZE_BYTES) {
@@ -120,28 +116,13 @@ serve(async (req) => {
       );
     }
 
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("scriba-files")
-      .download(filePath);
-
-    if (downloadError || !fileData) {
-      throw new Error("Không thể tải file: " + (downloadError?.message || "unknown"));
-    }
-
-    if (fileData.size > MAX_FILE_SIZE_BYTES) {
-      return new Response(
-        JSON.stringify({
-          error: "File quá lớn để xử lý. Vui lòng chọn file nhỏ hơn 10MB.",
-        }),
-        {
-          status: 413,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    const fileResp = await fetch(fileUrl);
+    if (!fileResp.ok || !fileResp.body) {
+      throw new Error("Không thể tải stream file");
     }
 
     const mimeType = getMimeType(filePath);
-    const bodyStream = buildGatewayBodyStream(fileData, mimeType);
+    const bodyStream = buildGatewayBodyStream(fileResp.body, mimeType);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
