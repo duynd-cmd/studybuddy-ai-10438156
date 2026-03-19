@@ -7,7 +7,76 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MAX_INLINE_FILE_SIZE_BYTES = 12 * 1024 * 1024; // 12MB
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // keep safe for edge memory
+const PARSE_PROMPT =
+  "Hãy trích xuất TOÀN BỘ nội dung text từ tài liệu này. Giữ nguyên cấu trúc, tiêu đề, danh sách. Trả về dưới dạng plain text có format markdown. Không thêm nhận xét hay giải thích, chỉ nội dung tài liệu.";
+
+function getMimeType(filePath: string) {
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  const mimeMap: Record<string, string> = {
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    doc: "application/msword",
+    ppt: "application/vnd.ms-powerpoint",
+    xls: "application/vnd.ms-excel",
+    txt: "text/plain",
+  };
+
+  return mimeMap[ext] || "application/octet-stream";
+}
+
+function toUint8Array(a: Uint8Array | ArrayBuffer): Uint8Array {
+  return a instanceof Uint8Array ? a : new Uint8Array(a);
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function buildGatewayBodyStream(fileBlob: Blob, mimeType: string) {
+  const encoder = new TextEncoder();
+  const promptJson = JSON.stringify(PARSE_PROMPT);
+
+  const prefix = `{"model":"google/gemini-3-flash-preview","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:${mimeType};base64,`;
+  const suffix = `"}},{"type":"text","text":${promptJson}}]}]}`;
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(encoder.encode(prefix));
+
+      const reader = fileBlob.stream().getReader();
+      let carry = new Uint8Array(0);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = toUint8Array(value as Uint8Array | ArrayBuffer);
+        const merged = concatBytes(carry, chunk);
+        const processLen = merged.length - (merged.length % 3);
+
+        if (processLen > 0) {
+          const processChunk = merged.subarray(0, processLen);
+          controller.enqueue(encoder.encode(encodeBase64(processChunk)));
+        }
+
+        carry = merged.subarray(processLen);
+      }
+
+      if (carry.length > 0) {
+        controller.enqueue(encoder.encode(encodeBase64(carry)));
+      }
+
+      controller.enqueue(encoder.encode(suffix));
+      controller.close();
+    },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -28,18 +97,21 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: fileData, error: downloadError } = await supabase.storage
+    const { data: signedData, error: signError } = await supabase.storage
       .from("scriba-files")
-      .download(filePath);
+      .createSignedUrl(filePath, 120);
 
-    if (downloadError || !fileData) {
-      throw new Error("Không thể tải file: " + (downloadError?.message || "unknown"));
+    if (signError || !signedData?.signedUrl) {
+      throw new Error("Không thể kiểm tra file: " + (signError?.message || "unknown"));
     }
 
-    if (fileData.size > MAX_INLINE_FILE_SIZE_BYTES) {
+    const headResp = await fetch(signedData.signedUrl, { method: "HEAD" });
+    const contentLength = Number(headResp.headers.get("content-length") ?? "0");
+
+    if (contentLength > 0 && contentLength > MAX_FILE_SIZE_BYTES) {
       return new Response(
         JSON.stringify({
-          error: "Tài liệu quá lớn để phân tích trực tiếp. Vui lòng dùng file nhỏ hơn 12MB.",
+          error: "File quá lớn để xử lý. Vui lòng chọn file nhỏ hơn 10MB.",
         }),
         {
           status: 413,
@@ -48,21 +120,28 @@ serve(async (req) => {
       );
     }
 
-    const ext = filePath.split(".").pop()?.toLowerCase() || "";
-    const mimeMap: Record<string, string> = {
-      pdf: "application/pdf",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      doc: "application/msword",
-      ppt: "application/vnd.ms-powerpoint",
-      xls: "application/vnd.ms-excel",
-      txt: "text/plain",
-    };
-    const mimeType = mimeMap[ext] || "application/octet-stream";
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("scriba-files")
+      .download(filePath);
 
-    const bytes = new Uint8Array(await fileData.arrayBuffer());
-    const base64 = encodeBase64(bytes);
+    if (downloadError || !fileData) {
+      throw new Error("Không thể tải file: " + (downloadError?.message || "unknown"));
+    }
+
+    if (fileData.size > MAX_FILE_SIZE_BYTES) {
+      return new Response(
+        JSON.stringify({
+          error: "File quá lớn để xử lý. Vui lòng chọn file nhỏ hơn 10MB.",
+        }),
+        {
+          status: 413,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const mimeType = getMimeType(filePath);
+    const bodyStream = buildGatewayBodyStream(fileData, mimeType);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -70,26 +149,7 @@ serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType};base64,${base64}`,
-                },
-              },
-              {
-                type: "text",
-                text: "Hãy trích xuất TOÀN BỘ nội dung text từ tài liệu này. Giữ nguyên cấu trúc, tiêu đề, danh sách. Trả về dưới dạng plain text có format markdown. Không thêm nhận xét hay giải thích, chỉ nội dung tài liệu.",
-              },
-            ],
-          },
-        ],
-      }),
+      body: bodyStream,
     });
 
     if (!response.ok) {
@@ -117,7 +177,12 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    const extractedText = result.choices?.[0]?.message?.content || "";
+    const content = result.choices?.[0]?.message?.content;
+    const extractedText = typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.map((part: any) => part?.text || "").join("")
+        : "";
 
     const { error: updateError } = await supabase
       .from("scriba_conversations")
