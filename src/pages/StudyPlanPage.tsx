@@ -138,9 +138,53 @@ export default function StudyPlanPage() {
     }
   };
 
+  // Check a single question answer (Three-Strike Rule)
+  const checkAnswer = (qi: number) => {
+    const q = reviewQuestions[qi];
+    const answer = reviewAnswers[qi];
+    if (answer === null || questionLocked[qi]) return;
+
+    if (answer === q.correct) {
+      // Correct — lock this question
+      const newLocked = [...questionLocked];
+      newLocked[qi] = true;
+      setQuestionLocked(newLocked);
+      toast.success(`Câu ${qi + 1}: Đúng rồi! 🎉`);
+    } else {
+      // Wrong — increment attempts
+      const newAttempts = [...reviewAttempts];
+      newAttempts[qi] += 1;
+      setReviewAttempts(newAttempts);
+
+      if (newAttempts[qi] >= 3) {
+        // 3 strikes — reveal answer and lock
+        const newLocked = [...questionLocked];
+        newLocked[qi] = true;
+        setQuestionLocked(newLocked);
+        toast.error(`Câu ${qi + 1}: Đáp án đúng là "${q.options[q.correct]}"`);
+      } else {
+        // Show next hint
+        const newHints = [...reviewHintsShown];
+        newHints[qi] = Math.min(newAttempts[qi], (q.hints || []).length);
+        setReviewHintsShown(newHints);
+
+        // Reset selection for retry
+        const newAnswers = [...reviewAnswers];
+        newAnswers[qi] = null;
+        setReviewAnswers(newAnswers);
+
+        toast.info(`Sai rồi! Thử lại nhé (lần ${newAttempts[qi]}/3)`);
+      }
+    }
+  };
+
+  // Final submit — called when all questions are locked (answered correctly or 3 strikes)
   const submitReview = async () => {
     if (!reviewTask || !user) return;
-    const score = reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0);
+    const score = reviewQuestions.reduce((s, q, i) => {
+      // Check if the final locked answer was correct
+      return s + (reviewAnswers[i] === q.correct ? 1 : 0);
+    }, 0);
     setReviewSubmitted(true);
 
     // Save review
@@ -161,6 +205,8 @@ export default function StudyPlanPage() {
     queryClient.invalidateQueries({ queryKey: ["study-plans", user.id] });
     queryClient.invalidateQueries({ queryKey: ["task-stats", user.id] });
   };
+
+  const allQuestionsLocked = questionLocked.every(Boolean);
 
   const skipReview = async () => {
     if (!reviewTask || !user) return;
