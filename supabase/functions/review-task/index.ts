@@ -18,18 +18,25 @@ Học sinh vừa hoàn thành bài học: "${taskTitle}"${taskDescription ? `\nM
 
 Hãy tạo CHÍNH XÁC 2 câu hỏi trắc nghiệm (4 đáp án A/B/C/D) liên quan đến nội dung bài học để kiểm tra kiến thức.
 
+Với MỖI câu hỏi, hãy tạo thêm 3 gợi ý (hint) theo thứ tự từ mơ hồ → cụ thể:
+- hint1: Gợi ý nhẹ — chỉ ra hướng suy nghĩ hoặc từ khóa liên quan
+- hint2: Gợi ý trung bình — thu hẹp phạm vi, loại bỏ 1-2 đáp án sai
+- hint3: Gợi ý mạnh — gần như chỉ ra đáp án, giải thích logic tại sao
+
 Trả về JSON theo format sau (KHÔNG thêm text nào khác):
 {
   "questions": [
     {
       "question": "Câu hỏi 1?",
       "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-      "correct": 0
+      "correct": 0,
+      "hints": ["Gợi ý 1...", "Gợi ý 2...", "Gợi ý 3..."]
     },
     {
       "question": "Câu hỏi 2?",
       "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-      "correct": 1
+      "correct": 1,
+      "hints": ["Gợi ý 1...", "Gợi ý 2...", "Gợi ý 3..."]
     }
   ]
 }`;
