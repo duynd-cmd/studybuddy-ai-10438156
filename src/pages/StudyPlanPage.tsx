@@ -376,36 +376,108 @@ export default function StudyPlanPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {reviewQuestions.map((q, qi) => (
-                <div key={qi} className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">{qi + 1}. {q.question}</p>
-                  <div className="space-y-1.5">
-                    {q.options.map((opt, oi) => {
-                      const selected = reviewAnswers[qi] === oi;
-                      const isCorrect = q.correct === oi;
-                      let optClass = "border-border hover:bg-secondary/50";
-                      if (reviewSubmitted) {
-                        if (isCorrect) optClass = "border-green-500 bg-green-50 dark:bg-green-950";
-                        else if (selected && !isCorrect) optClass = "border-destructive bg-red-50 dark:bg-red-950";
-                      } else if (selected) {
-                        optClass = "border-accent bg-accent/10";
-                      }
-                      return (
-                        <button
-                          key={oi}
-                          disabled={reviewSubmitted}
-                          onClick={() => {
-                            const newAnswers = [...reviewAnswers];
-                            newAnswers[qi] = oi;
-                            setReviewAnswers(newAnswers);
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${optClass}`}
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
+              {reviewQuestions.map((q, qi) => {
+                const isLocked = questionLocked[qi];
+                const attempts = reviewAttempts[qi];
+                const hintsToShow = reviewHintsShown[qi];
+                const failedOut = isLocked && reviewAnswers[qi] !== q.correct;
+
+                return (
+                  <div key={qi} className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">{qi + 1}. {q.question}</p>
+                    
+                    {/* Hints */}
+                    {hintsToShow > 0 && q.hints && (
+                      <div className="space-y-1">
+                        {q.hints.slice(0, hintsToShow).map((hint, hi) => (
+                          <div key={hi} className="flex items-start gap-2 px-3 py-2 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                            <span className="text-amber-600 dark:text-amber-400 text-xs font-bold mt-0.5">💡 Gợi ý {hi + 1}:</span>
+                            <span className="text-xs text-amber-800 dark:text-amber-300">{hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      {q.options.map((opt, oi) => {
+                        const selected = reviewAnswers[qi] === oi;
+                        const isCorrect = q.correct === oi;
+                        let optClass = "border-border hover:bg-secondary/50";
+                        
+                        if (isLocked) {
+                          if (isCorrect) optClass = "border-green-500 bg-green-50 dark:bg-green-950";
+                          else if (failedOut && selected) optClass = "border-destructive bg-red-50 dark:bg-red-950";
+                          else optClass = "border-border opacity-50";
+                        } else if (selected) {
+                          optClass = "border-accent bg-accent/10";
+                        }
+
+                        return (
+                          <button
+                            key={oi}
+                            disabled={isLocked}
+                            onClick={() => {
+                              const newAnswers = [...reviewAnswers];
+                              newAnswers[qi] = oi;
+                              setReviewAnswers(newAnswers);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${optClass}`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Per-question check button */}
+                    {!isLocked && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => checkAnswer(qi)}
+                        disabled={reviewAnswers[qi] === null}
+                        className="text-xs"
+                      >
+                        Kiểm tra câu {qi + 1} {attempts > 0 ? `(${attempts}/3)` : ""}
+                      </Button>
+                    )}
+
+                    {/* Status badge */}
+                    {isLocked && (
+                      <p className={`text-xs font-medium ${reviewAnswers[qi] === q.correct ? "text-green-600" : "text-destructive"}`}>
+                        {reviewAnswers[qi] === q.correct ? "✅ Đúng!" : `❌ Sai 3 lần — Đáp án: ${q.options[q.correct]}`}
+                      </p>
+                    )}
                   </div>
+                );
+              })}
+
+              <div className="flex gap-2">
+                {!reviewSubmitted ? (
+                  <>
+                    {allQuestionsLocked ? (
+                      <Button
+                        onClick={submitReview}
+                        className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                      >
+                        Hoàn thành ôn tập
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground flex-1 text-center py-2">
+                        Trả lời từng câu hỏi để hoàn thành
+                      </p>
+                    )}
+                    <Button variant="ghost" onClick={skipReview} className="text-muted-foreground">
+                      Bỏ qua
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setReviewOpen(false)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+                    {reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0)}/{reviewQuestions.length} đúng — Đóng
+                  </Button>
+                )}
+              </div>
+            </div>
                 </div>
               ))}
               <div className="flex gap-2">
