@@ -17,6 +17,7 @@ type ReviewQuestion = {
   question: string;
   options: string[];
   correct: number;
+  hints?: string[];
 };
 
 export default function StudyPlanPage() {
@@ -35,6 +36,10 @@ export default function StudyPlanPage() {
   const [reviewAnswers, setReviewAnswers] = useState<(number | null)[]>([null, null]);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
+  // Three-Strike hint state: attempts per question, shown hints per question
+  const [reviewAttempts, setReviewAttempts] = useState<number[]>([0, 0]);
+  const [reviewHintsShown, setReviewHintsShown] = useState<number[]>([0, 0]);
+  const [questionLocked, setQuestionLocked] = useState<boolean[]>([false, false]);
 
   // Flashcards state
   const [flashcardsOpen, setFlashcardsOpen] = useState(false);
