@@ -478,29 +478,6 @@ export default function StudyPlanPage() {
                 )}
               </div>
             </div>
-                </div>
-              ))}
-              <div className="flex gap-2">
-                {!reviewSubmitted ? (
-                  <>
-                    <Button
-                      onClick={submitReview}
-                      disabled={reviewAnswers.some((a) => a === null)}
-                      className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-                    >
-                      Nộp bài
-                    </Button>
-                    <Button variant="ghost" onClick={skipReview} className="text-muted-foreground">
-                      Bỏ qua
-                    </Button>
-                  </>
-                ) : (
-                  <Button onClick={() => setReviewOpen(false)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                    {reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0)}/{reviewQuestions.length} đúng — Đóng
-                  </Button>
-                )}
-              </div>
-            </div>
           )}
         </DialogContent>
       </Dialog>
