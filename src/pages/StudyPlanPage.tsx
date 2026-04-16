@@ -113,6 +113,9 @@ export default function StudyPlanPage() {
     setReviewTask({ ...task, planSubject: plan.subject });
     setReviewAnswers([null, null]);
     setReviewSubmitted(false);
+    setReviewAttempts([0, 0]);
+    setReviewHintsShown([0, 0]);
+    setQuestionLocked([false, false]);
     setReviewLoading(true);
     setReviewOpen(true);
 
