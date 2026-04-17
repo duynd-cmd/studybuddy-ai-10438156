@@ -182,12 +182,12 @@ export default function StudyPlanPage() {
   const submitReview = async () => {
     if (!reviewTask || !user) return;
     const score = reviewQuestions.reduce((s, q, i) => {
-      // Check if the final locked answer was correct
       return s + (reviewAnswers[i] === q.correct ? 1 : 0);
     }, 0);
+    const allCorrect = score === reviewQuestions.length;
     setReviewSubmitted(true);
 
-    // Save review
+    // Save review log regardless
     await supabase.from("task_reviews" as any).insert({
       task_id: reviewTask.id,
       user_id: user.id,
@@ -196,11 +196,16 @@ export default function StudyPlanPage() {
       score,
     });
 
-    // Mark task complete
-    await supabase.from("study_tasks").update({
-      completed: true,
-      completed_at: new Date().toISOString(),
-    }).eq("id", reviewTask.id);
+    // ONLY mark task complete if all answers were correct
+    if (allCorrect) {
+      await supabase.from("study_tasks").update({
+        completed: true,
+        completed_at: new Date().toISOString(),
+      }).eq("id", reviewTask.id);
+      toast.success("Hoàn thành! Bài học đã được đánh dấu xong ✅");
+    } else {
+      toast.error("Có câu trả lời sai — bạn cần làm lại bài này để tick hoàn thành");
+    }
 
     queryClient.invalidateQueries({ queryKey: ["study-plans", user.id] });
     queryClient.invalidateQueries({ queryKey: ["task-stats", user.id] });
@@ -472,9 +477,15 @@ export default function StudyPlanPage() {
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => setReviewOpen(false)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                    {reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0)}/{reviewQuestions.length} đúng — Đóng
-                  </Button>
+                  (() => {
+                    const correct = reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0);
+                    const allRight = correct === reviewQuestions.length;
+                    return (
+                      <Button onClick={() => setReviewOpen(false)} className={`w-full ${allRight ? "bg-accent text-accent-foreground hover:bg-accent/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}`}>
+                        {correct}/{reviewQuestions.length} đúng — {allRight ? "Đã hoàn thành ✅" : "Chưa đạt, cần làm lại"}
+                      </Button>
+                    );
+                  })()
                 )}
               </div>
             </div>
