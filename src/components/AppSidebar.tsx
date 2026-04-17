@@ -1,4 +1,4 @@
-import { LayoutDashboard, BookOpen, Search, Brain, Clock, FileText, LogOut } from "lucide-react";
+import { LayoutDashboard, BookOpen, Search, Brain, Clock, FileText, LogOut, Layers } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,6 +24,7 @@ const navItems = [
   { title: "Lộ trình", url: "/dashboard/ke-hoach", icon: BookOpen },
   { title: "Tài liệu", url: "/dashboard/tai-nguyen", icon: Search },
   { title: "Scriba AI", url: "/dashboard/scriba", icon: Brain },
+  { title: "Study Hub", url: "/dashboard/study-hub", icon: Layers },
   { title: "Đồng hồ", url: "/dashboard/pomodoro", icon: Clock },
   { title: "Ghi chú", url: "/dashboard/ghi-chu", icon: FileText },
 ];

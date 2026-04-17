@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.parse-document]
 verify_jwt = false
+
+[functions.study-hub-chat]
+verify_jwt = false
