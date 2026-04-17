@@ -477,9 +477,15 @@ export default function StudyPlanPage() {
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => setReviewOpen(false)} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
-                    {reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0)}/{reviewQuestions.length} đúng — Đóng
-                  </Button>
+                  (() => {
+                    const correct = reviewQuestions.reduce((s, q, i) => s + (reviewAnswers[i] === q.correct ? 1 : 0), 0);
+                    const allRight = correct === reviewQuestions.length;
+                    return (
+                      <Button onClick={() => setReviewOpen(false)} className={`w-full ${allRight ? "bg-accent text-accent-foreground hover:bg-accent/90" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}`}>
+                        {correct}/{reviewQuestions.length} đúng — {allRight ? "Đã hoàn thành ✅" : "Chưa đạt, cần làm lại"}
+                      </Button>
+                    );
+                  })()
                 )}
               </div>
             </div>
