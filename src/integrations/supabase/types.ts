@@ -240,6 +240,109 @@ export type Database = {
           },
         ]
       }
+      study_hub_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      study_hub_files: {
+        Row: {
+          content: string | null
+          conversation_id: string
+          created_at: string
+          file_name: string
+          file_type: string
+          id: string
+          storage_path: string | null
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
+          conversation_id: string
+          created_at?: string
+          file_name: string
+          file_type: string
+          id?: string
+          storage_path?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          conversation_id?: string
+          created_at?: string
+          file_name?: string
+          file_type?: string
+          id?: string
+          storage_path?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_hub_files_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "study_hub_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_hub_messages: {
+        Row: {
+          attachments: Json | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          attachments?: Json | null
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          attachments?: Json | null
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_hub_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "study_hub_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       study_plans: {
         Row: {
           created_at: string

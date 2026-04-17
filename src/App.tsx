@@ -14,6 +14,7 @@ import DashboardOverview from "./pages/DashboardOverview";
 import StudyPlanPage from "./pages/StudyPlanPage";
 import ResourcesPage from "./pages/ResourcesPage";
 import ScribaPage from "./pages/ScribaPage";
+import StudyHubPage from "./pages/StudyHubPage";
 import NotesPage from "./pages/NotesPage";
 import PomodoroPage from "./pages/PomodoroPage";
 import NotFound from "./pages/NotFound";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="ke-hoach" element={<StudyPlanPage />} />
               <Route path="tai-nguyen" element={<ResourcesPage />} />
               <Route path="scriba" element={<ScribaPage />} />
+              <Route path="study-hub" element={<StudyHubPage />} />
               <Route path="ghi-chu" element={<NotesPage />} />
               <Route path="pomodoro" element={<PomodoroPage />} />
             </Route>
