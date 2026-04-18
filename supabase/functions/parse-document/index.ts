@@ -90,8 +90,29 @@ function buildGatewayBodyStream(source: ReadableStream<Uint8Array>, mimeType: st
 }
 
 async function extractDocx(bytes: Uint8Array): Promise<string> {
-  const result = await mammoth.extractRawText({ arrayBuffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
-  return result.value || "";
+  // mammoth in Deno expects a Node-style Buffer-like object via `buffer` key.
+  // Fallback: parse DOCX as ZIP and extract text from word/document.xml ourselves.
+  try {
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    // @ts-ignore - mammoth Deno build accepts {buffer}
+    const result = await mammoth.extractRawText({ buffer: bytes });
+    if (result?.value) return result.value;
+    const result2 = await mammoth.extractRawText({ arrayBuffer: ab });
+    if (result2?.value) return result2.value;
+  } catch (err) {
+    console.warn("mammoth failed, falling back to zip parse:", err);
+  }
+
+  // Fallback: extract text from word/document.xml via JSZip
+  const zip = await JSZip.loadAsync(bytes);
+  const docXml = zip.file("word/document.xml");
+  if (!docXml) throw new Error("DOCX không hợp lệ: thiếu word/document.xml");
+  const xml = await docXml.async("string");
+  const paragraphs = [...xml.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)].map((p) => {
+    const texts = [...p[1].matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)].map((m) => m[1]);
+    return texts.join("");
+  });
+  return paragraphs.filter(Boolean).join("\n");
 }
 
 async function extractXlsx(bytes: Uint8Array): Promise<string> {
