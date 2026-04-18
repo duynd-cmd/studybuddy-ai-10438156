@@ -43,7 +43,7 @@ export function AppSidebar() {
   const gradeLabel = profile?.grade ? `Lớp ${profile.grade}` : "";
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="border-r border-border/40 bg-sidebar/60 backdrop-blur-2xl">
       <SidebarHeader className="p-4">
         {!collapsed ? (
           <div className="flex items-center gap-2">
@@ -108,10 +108,10 @@ export function AppSidebar() {
                         <NavLink
                           to={item.url}
                           end={item.url === "/dashboard"}
-                          className={`transition-colors rounded-lg ${
+                          className={`transition-all rounded-lg ${
                             isActive
-                              ? "bg-foreground text-primary-foreground font-medium"
-                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              ? "bg-foreground text-primary-foreground font-medium shadow-[0_0_0_1px_hsl(var(--accent)/0.3),0_4px_20px_-4px_hsl(var(--accent)/0.4)]"
+                              : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground hover:backdrop-blur-md"
                           }`}
                           activeClassName=""
                         >
