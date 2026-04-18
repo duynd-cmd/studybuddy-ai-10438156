@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatedSection } from "@/components/AnimatedSection";
+import { ParticleBurst, useParticleBurst } from "@/components/motion/ParticleBurst";
 import { CalendarDays, Loader2, Plus, Trash2, Award, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,6 +25,7 @@ export default function StudyPlanPage() {
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const queryClient = useQueryClient();
+  const successBurst = useParticleBurst();
 
   const [subject, setSubject] = useState("");
   const [duration, setDuration] = useState("1_week");
@@ -202,6 +204,7 @@ export default function StudyPlanPage() {
         completed: true,
         completed_at: new Date().toISOString(),
       }).eq("id", reviewTask.id);
+      successBurst.fire();
       toast.success("Hoàn thành! Bài học đã được đánh dấu xong ✅");
     } else {
       toast.error("Có câu trả lời sai — bạn cần làm lại bài này để tick hoàn thành");
@@ -284,9 +287,10 @@ export default function StudyPlanPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      <ParticleBurst trigger={successBurst.trigger} count={30} />
       <AnimatedSection>
-        <h1 className="text-2xl font-heading font-bold text-foreground">Kế hoạch học tập</h1>
+        <h1 className="text-3xl font-heading font-bold text-foreground tracking-tight">Kế hoạch học tập</h1>
       </AnimatedSection>
 
       <AnimatedSection delay={0.1}>
