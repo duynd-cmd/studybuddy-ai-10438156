@@ -1,63 +1,119 @@
 
 
 ## Goal
-Build a new **Study Hub** feature — a multi-modal workspace where students upload files/images/plans and the AI processes them into actionable learning steps following the "Study Hub Engine" persona.
+Rebuild the UI with a 2026 high-end aesthetic — **Glass-Bento layouts** + **Cinematic Motion** — while keeping the existing color palette (warm cream `#EFE9D5`, slate `#536471`, electric lime `#C1FF72`).
 
-## Approach
-Create a NEW page/route separate from existing Scriba (which stays as single-file mentor). Study Hub = multi-file + image + plan parsing + recursive hint protocol.
+## Color Direction (preserved)
+Keep current tokens. Adapt "mesh gradient" idea to brand: animated blobs blending **cream → muted slate → lime accent glow** (no navy/violet — those clash with current brand).
 
 ## What to Build
 
-### 1. New Route & Page
-- Route: `/dashboard/study-hub` → new page `src/pages/StudyHubPage.tsx`
-- Sidebar entry: "Study Hub" added to `AppSidebar.tsx`
+### 1. Foundation — Design Primitives
+**New file: `src/components/ui/glass-card.tsx`**
+- Frosted-glass card: `bg-card/40 backdrop-blur-xl` + 1px gradient border-glow (`border-white/20` + inner ring using `shadow-[inset_0_1px_0_0_hsl(var(--accent)/0.2)]`)
+- Variants: `default`, `elevated`, `interactive` (with tilt)
 
-### 2. New Edge Function: `study-hub-chat`
-- Streaming SSE (same pattern as `scriba-chat`)
-- Model: `google/gemini-3-flash-preview` (multimodal)
-- Accepts: `messages`, `attachments[]` (text files inline + image data URLs)
-- System prompt embeds the full **Study Hub Engine** persona:
-  - Multi-modal acknowledgement ("File received. Analyzing...")
-  - Plan parsing → markdown timeline table
-  - Image logic scan
-  - **Recursive Hint Protocol** (3-attempt: Conceptual → Structural → Solution + Post-Mortem)
-  - Anti-hallucination: only MDN / W3Schools / react.dev / web.dev, else `[Google Search: ...]` fallback
-  - Tone: direct, dry, technical; tables/code blocks/bold
+**New file: `src/components/ui/mesh-gradient.tsx`**
+- Fixed full-viewport background. 3 animated SVG/CSS blobs (cream, slate-tint, accent-lime glow) with `@keyframes blob-drift` (60–90s loops)
+- Mounted once in `Dashboard.tsx` behind content
 
-### 3. Multi-Modal File Handling (client-side)
-- **Text files** (.txt, .md, .js, .ts, .tsx, .py, .html, .css, .json) → read as text inline, included in `attachments`
-- **Images** (.png, .jpg, .webp) → base64 data URL, sent to Gemini as `image_url` content part
-- **Documents** (.pdf, .docx, .pptx, .xlsx) → reuse existing `parse-document` function → text inline
-- File chips above input with type icons + remove button
-- Upload toast: "File received. Analyzing..."
+**Extend `tailwind.config.ts`**
+- Add keyframes: `blob-drift`, `liquid-wave`, `particle-burst`, `stagger-reveal`
+- Add utilities: `.glass`, `.border-glow`, `.magnetic` (hook-driven)
 
-### 4. Database
-New tables (migration required):
-- `study_hub_conversations`: `id, user_id, title, created_at, updated_at`
-- `study_hub_messages`: `id, conversation_id, user_id, role, content, attachments(jsonb), created_at`
-- `study_hub_files`: `id, conversation_id, user_id, file_name, file_type, content(text), storage_path, created_at`
-- RLS: owner-only (`auth.uid() = user_id`)
-- Images stored in existing `scriba-files` bucket (rename mentally to "workspace files" — same bucket works)
+### 2. Motion Components
+**New: `src/components/motion/MagneticButton.tsx`**
+- Wraps `Button`. Uses `useMotionValue` + `useSpring` (Framer). On `mousemove` within radius, button translates ~8px toward cursor, snaps back on leave. Spring stiffness 150, damping 15.
 
-### 5. UI (`StudyHubPage.tsx`)
-- Left: conversation list (like Scriba)
-- Right: chat with markdown rendering (`react-markdown` — already in project)
-- Bottom: textarea + "Attach" button (multi-select, mixed types) + send
-- File chips row above textarea with icons (📄 doc, 🖼 image, 💻 code)
-- Streaming token-by-token rendering (reuse Scriba's SSE parsing logic)
-- Empty state: "Drop files, paste a plan, or share a screenshot to start."
+**New: `src/components/motion/TiltCard.tsx`**
+- 3D tilt using `rotateX/rotateY` based on cursor position (max ±8°)
+- Glare overlay: radial gradient that follows cursor (`mix-blend-overlay`)
+- Wraps any child (used for lesson/dashboard cards)
 
-### 6. Edge Function Config
-- Add `[functions.study-hub-chat]` block to `supabase/config.toml` with `verify_jwt = false`
+**New: `src/components/motion/StaggerReveal.tsx`**
+- `motion.div` parent with `variants` + `staggerChildren: 0.08`
+- Children fade + slide up (y: 24 → 0) on `whileInView`
+- Drop-in replacement for `AnimatedSection`
+
+**New: `src/components/motion/ParticleBurst.tsx`**
+- Imperative trigger: `<ParticleBurst trigger={count} />` or `useParticleBurst()` hook
+- 20–30 particles using Framer Motion, lime/cream colored, physics-based spread + fade
+- Used on quiz complete + streak milestones
+
+**New: `src/components/motion/LiquidProgress.tsx`**
+- Circular SVG (e.g., 120×120) with animated wave clip-path filling from bottom
+- Wave SVG path animates horizontally (`<animate>` or Framer keyframes)
+- Center shows `%` text. Replaces `Progress` in dashboard hero stats.
+
+**New: `src/components/motion/FlipCard.tsx`**
+- Front (concept) / Back (quick-check) using `rotateY` 180° on click or hover
+- `transformStyle: preserve-3d`, backface hidden
+- Used for lesson cards on `StudyPlanPage` / `DashboardOverview`
+
+### 3. Layout Morphing (Page Transitions)
+- Update `Dashboard.tsx`: keep `AnimatePresence`, switch to `mode="wait"` + add `layoutId` support
+- Lesson cards get `layoutId={`lesson-${id}`}` — clicking morphs the card into the detail view (uses Framer's shared layout)
+- Detail page wraps content in matching `motion.div layoutId=...`
+
+### 4. Bento Dashboard Refactor
+**Modify: `src/pages/DashboardOverview.tsx`**
+- Replace current grid with **Bento layout**:
+  ```text
+  ┌──────────────┬─────────┐
+  │  Hero Stats  │ Streak  │  (col-span-2 | col-span-1)
+  │  (Liquid %)  │ (burst) │
+  ├──────┬───────┴─────────┤
+  │ Plan │  Recent Notes   │
+  │ Card │  (FlipCards)    │
+  ├──────┴────────┬────────┤
+  │ Quick Actions │ Pomod. │
+  └───────────────┴────────┘
+  ```
+- All cards use `GlassCard` + `TiltCard` wrapper
+- Stats use `LiquidProgress`
+- Quick actions use `MagneticButton`
+- Whole grid wrapped in `StaggerReveal`
+
+### 5. Apply Across App (lighter touch)
+- `AppSidebar.tsx`: glass background (`bg-sidebar/60 backdrop-blur-xl`), border-glow on active item, subtle magnetic hover on nav items
+- `StudyPlanPage.tsx`: lesson list → `FlipCard` grid + `TiltCard`; on task complete → `ParticleBurst`
+- `ScribaPage.tsx` / `StudyHubPage.tsx`: chat panels become glass cards over mesh background
+- `PomodoroPage.tsx`: replace timer ring with `LiquidProgress`; on cycle complete → `ParticleBurst`
+- `NotesPage.tsx`: note cards glassified + tilt
+- Page transitions in `Dashboard.tsx`: spring-based (stiffness 280, damping 30) for "snappy" feel
+
+### 6. Performance Guards
+- Mesh gradient: CSS-only (no JS animation loop), `will-change: transform`
+- Tilt + magnetic: `prefers-reduced-motion` respected → disable transforms
+- Particle bursts capped at 30 particles, auto-cleanup after 1.2s
+- All blur layers use `backdrop-filter` (GPU); fallback `bg-card/80` for unsupported browsers
 
 ## Files Created/Modified
-- **New**: `src/pages/StudyHubPage.tsx`
-- **New**: `supabase/functions/study-hub-chat/index.ts`
-- **New migration**: `study_hub_conversations`, `study_hub_messages`, `study_hub_files` + RLS
-- **Modified**: `src/App.tsx` (route), `src/components/AppSidebar.tsx` (nav entry), `supabase/config.toml`
+**New (10):**
+- `src/components/ui/glass-card.tsx`
+- `src/components/ui/mesh-gradient.tsx`
+- `src/components/motion/MagneticButton.tsx`
+- `src/components/motion/TiltCard.tsx`
+- `src/components/motion/StaggerReveal.tsx`
+- `src/components/motion/ParticleBurst.tsx`
+- `src/components/motion/LiquidProgress.tsx`
+- `src/components/motion/FlipCard.tsx`
+- `src/hooks/useMagnetic.tsx`
+- `src/hooks/useReducedMotion.tsx`
 
-## Out of Scope (intentionally)
-- Not modifying existing Scriba page (stays as single-file mentor for backward compatibility)
-- No video/audio support yet
-- No persistent "plan tracking" — plans render as markdown timelines in chat (can be added later)
+**Modified (8):**
+- `tailwind.config.ts` (keyframes, utilities)
+- `src/index.css` (glass utility classes, mesh anims)
+- `src/pages/Dashboard.tsx` (mesh bg, layout morphing setup)
+- `src/pages/DashboardOverview.tsx` (Bento refactor)
+- `src/pages/StudyPlanPage.tsx` (flip cards + bursts)
+- `src/pages/PomodoroPage.tsx` (liquid loader + bursts)
+- `src/components/AppSidebar.tsx` (glass styling)
+- `src/components/AnimatedSection.tsx` (extend with stagger variant)
+
+## Out of Scope
+- No color palette change (per your instruction — keep cream/slate/lime)
+- No navy/violet mesh (replaced with brand-aligned mesh)
+- Existing chat/AI logic untouched — only visual shell changes
+- No new dependencies (Framer Motion already installed; pure CSS for gradients/blur)
 
