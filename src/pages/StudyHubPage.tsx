@@ -17,9 +17,20 @@ import {
   Image as ImageIcon,
   Code2,
   Layers,
+  BookMarked,
+  NotebookPen,
+  CalendarRange,
 } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -78,8 +89,47 @@ export default function StudyHubPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: userNotes } = useQuery({
+    queryKey: ["study-hub-embed-notes", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from("notes")
+        .select("id, title, subject, content, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!user && embedOpen,
+  });
+
+  const { data: userPlans } = useQuery({
+    queryKey: ["study-hub-embed-plans", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data: plans } = await supabase
+        .from("study_plans")
+        .select("id, subject, duration, status, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!plans) return [];
+      const ids = plans.map((p) => p.id);
+      const { data: tasks } = await supabase
+        .from("study_tasks")
+        .select("plan_id, day_number, title, description, completed")
+        .in("plan_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
+        .order("day_number", { ascending: true });
+      return plans.map((p) => ({
+        ...p,
+        tasks: (tasks || []).filter((t) => t.plan_id === p.id),
+      }));
+    },
+    enabled: !!user && embedOpen,
+  });
 
   const { data: conversations } = useQuery({
     queryKey: ["study-hub-convos", user?.id],
@@ -263,6 +313,62 @@ export default function StudyHubPage() {
 
   const removePendingAtt = (idx: number) => {
     setPendingAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const embedNote = async (note: { id: string; title: string; subject: string | null; content: string | null }) => {
+    if (!user || !activeConvoId) {
+      toast.error("Hãy tạo workspace trước.");
+      return;
+    }
+    const name = `Note: ${note.title}`;
+    const body = `# ${note.title}${note.subject ? ` (${note.subject})` : ""}\n\n${note.content || "(trống)"}`;
+    const att: Attachment = { name, type: "text", content: body };
+    await supabase.from("study_hub_files").insert({
+      conversation_id: activeConvoId,
+      user_id: user.id,
+      file_name: name,
+      file_type: "text",
+      content: body,
+      storage_path: null,
+    });
+    setPendingAttachments((p) => [...p, att]);
+    queryClient.invalidateQueries({ queryKey: ["study-hub-files", activeConvoId] });
+    toast.success("Đã embed ghi chú vào workspace.");
+    setEmbedOpen(false);
+  };
+
+  const embedPlan = async (plan: any) => {
+    if (!user || !activeConvoId) {
+      toast.error("Hãy tạo workspace trước.");
+      return;
+    }
+    const name = `Plan: ${plan.subject}`;
+    const tasksByDay = new Map<number, any[]>();
+    (plan.tasks || []).forEach((t: any) => {
+      if (!tasksByDay.has(t.day_number)) tasksByDay.set(t.day_number, []);
+      tasksByDay.get(t.day_number)!.push(t);
+    });
+    let body = `# Kế hoạch học: ${plan.subject}\n`;
+    body += `**Thời lượng**: ${plan.duration} • **Trạng thái**: ${plan.status}\n\n`;
+    body += `| Day | Task | Description | Status |\n|---|---|---|---|\n`;
+    [...tasksByDay.keys()].sort((a, b) => a - b).forEach((day) => {
+      tasksByDay.get(day)!.forEach((t) => {
+        body += `| ${day} | ${t.title} | ${(t.description || "").replace(/\|/g, "\\|").replace(/\n/g, " ")} | ${t.completed ? "✅" : "⏳"} |\n`;
+      });
+    });
+    const att: Attachment = { name, type: "text", content: body };
+    await supabase.from("study_hub_files").insert({
+      conversation_id: activeConvoId,
+      user_id: user.id,
+      file_name: name,
+      file_type: "text",
+      content: body,
+      storage_path: null,
+    });
+    setPendingAttachments((p) => [...p, att]);
+    queryClient.invalidateQueries({ queryKey: ["study-hub-files", activeConvoId] });
+    toast.success("Đã embed kế hoạch vào workspace.");
+    setEmbedOpen(false);
   };
 
   const handleDrop = useCallback(
@@ -532,6 +638,16 @@ export default function StudyHubPage() {
                   <Paperclip className="w-4 h-4" />
                 )}
               </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setEmbedOpen(true)}
+                className="shrink-0"
+                aria-label="embed from app"
+                title="Embed ghi chú hoặc kế hoạch từ app"
+              >
+                <BookMarked className="w-4 h-4" />
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -567,6 +683,70 @@ export default function StudyHubPage() {
           </div>
         )}
       </Card>
+
+      <Dialog open={embedOpen} onOpenChange={setEmbedOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Embed từ app vào workspace</DialogTitle>
+            <DialogDescription>
+              Chọn một ghi chú hoặc kế hoạch học để đính kèm làm context cho AI.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs defaultValue="notes">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="notes">
+                <NotebookPen className="w-4 h-4 mr-1.5" /> Ghi chú
+              </TabsTrigger>
+              <TabsTrigger value="plans">
+                <CalendarRange className="w-4 h-4 mr-1.5" /> Kế hoạch
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="notes" className="max-h-[50vh] overflow-y-auto space-y-1.5 mt-3">
+              {!userNotes?.length ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Chưa có ghi chú nào. Tạo ghi chú ở trang Ghi chú trước.
+                </p>
+              ) : (
+                userNotes.map((n: any) => (
+                  <button
+                    key={n.id}
+                    onClick={() => embedNote(n)}
+                    className="w-full text-left p-3 rounded border border-border hover:bg-accent/10 transition-colors"
+                  >
+                    <div className="font-medium text-sm">{n.title}</div>
+                    {n.subject && (
+                      <div className="text-xs text-muted-foreground">{n.subject}</div>
+                    )}
+                    <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                      {n.content || "(trống)"}
+                    </div>
+                  </button>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="plans" className="max-h-[50vh] overflow-y-auto space-y-1.5 mt-3">
+              {!userPlans?.length ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Chưa có kế hoạch nào. Tạo kế hoạch ở trang Kế hoạch học tập trước.
+                </p>
+              ) : (
+                userPlans.map((p: any) => (
+                  <button
+                    key={p.id}
+                    onClick={() => embedPlan(p)}
+                    className="w-full text-left p-3 rounded border border-border hover:bg-accent/10 transition-colors"
+                  >
+                    <div className="font-medium text-sm">{p.subject}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {p.duration} • {p.tasks?.length || 0} task • {p.status}
+                    </div>
+                  </button>
+                ))
+              )}
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
