@@ -315,6 +315,62 @@ export default function StudyHubPage() {
     setPendingAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const embedNote = async (note: { id: string; title: string; subject: string | null; content: string | null }) => {
+    if (!user || !activeConvoId) {
+      toast.error("Hãy tạo workspace trước.");
+      return;
+    }
+    const name = `Note: ${note.title}`;
+    const body = `# ${note.title}${note.subject ? ` (${note.subject})` : ""}\n\n${note.content || "(trống)"}`;
+    const att: Attachment = { name, type: "text", content: body };
+    await supabase.from("study_hub_files").insert({
+      conversation_id: activeConvoId,
+      user_id: user.id,
+      file_name: name,
+      file_type: "text",
+      content: body,
+      storage_path: null,
+    });
+    setPendingAttachments((p) => [...p, att]);
+    queryClient.invalidateQueries({ queryKey: ["study-hub-files", activeConvoId] });
+    toast.success("Đã embed ghi chú vào workspace.");
+    setEmbedOpen(false);
+  };
+
+  const embedPlan = async (plan: any) => {
+    if (!user || !activeConvoId) {
+      toast.error("Hãy tạo workspace trước.");
+      return;
+    }
+    const name = `Plan: ${plan.subject}`;
+    const tasksByDay = new Map<number, any[]>();
+    (plan.tasks || []).forEach((t: any) => {
+      if (!tasksByDay.has(t.day_number)) tasksByDay.set(t.day_number, []);
+      tasksByDay.get(t.day_number)!.push(t);
+    });
+    let body = `# Kế hoạch học: ${plan.subject}\n`;
+    body += `**Thời lượng**: ${plan.duration} • **Trạng thái**: ${plan.status}\n\n`;
+    body += `| Day | Task | Description | Status |\n|---|---|---|---|\n`;
+    [...tasksByDay.keys()].sort((a, b) => a - b).forEach((day) => {
+      tasksByDay.get(day)!.forEach((t) => {
+        body += `| ${day} | ${t.title} | ${(t.description || "").replace(/\|/g, "\\|").replace(/\n/g, " ")} | ${t.completed ? "✅" : "⏳"} |\n`;
+      });
+    });
+    const att: Attachment = { name, type: "text", content: body };
+    await supabase.from("study_hub_files").insert({
+      conversation_id: activeConvoId,
+      user_id: user.id,
+      file_name: name,
+      file_type: "text",
+      content: body,
+      storage_path: null,
+    });
+    setPendingAttachments((p) => [...p, att]);
+    queryClient.invalidateQueries({ queryKey: ["study-hub-files", activeConvoId] });
+    toast.success("Đã embed kế hoạch vào workspace.");
+    setEmbedOpen(false);
+  };
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
