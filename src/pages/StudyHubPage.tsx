@@ -638,6 +638,16 @@ export default function StudyHubPage() {
                   <Paperclip className="w-4 h-4" />
                 )}
               </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setEmbedOpen(true)}
+                className="shrink-0"
+                aria-label="embed from app"
+                title="Embed ghi chú hoặc kế hoạch từ app"
+              >
+                <BookMarked className="w-4 h-4" />
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
