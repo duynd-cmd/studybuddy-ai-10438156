@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
+import { MagneticButton } from "@/components/motion/MagneticButton";
+import { LiquidProgress } from "@/components/motion/LiquidProgress";
+import { ParticleBurst, useParticleBurst } from "@/components/motion/ParticleBurst";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +23,7 @@ export default function PomodoroPage() {
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const queryClient = useQueryClient();
+  const burst = useParticleBurst();
 
   const [sessionType, setSessionType] = useState<SessionType>("focus");
   const [timeLeft, setTimeLeft] = useState(DURATIONS.focus);
@@ -41,6 +46,7 @@ export default function PomodoroPage() {
 
   const handleComplete = useCallback(async () => {
     setIsRunning(false);
+    burst.fire();
     if (sessionType === "focus" && user) {
       await supabase.from("pomodoro_sessions").insert({
         user_id: user.id, subject: subject || null,
@@ -58,7 +64,7 @@ export default function PomodoroPage() {
       toast.success("Nghỉ ngơi xong! Tiếp tục nào 💪");
       setSessionType("focus"); setTimeLeft(DURATIONS.focus);
     }
-  }, [sessionType, user, subject, completedFocus, queryClient]);
+  }, [sessionType, user, subject, completedFocus, queryClient, burst]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -86,19 +92,16 @@ export default function PomodoroPage() {
     enabled: !!user,
   });
 
-  const radius = 90;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
-
   return (
     <div className="max-w-lg mx-auto space-y-6">
       <AnimatedSection>
-        <h1 className="text-2xl font-heading font-bold text-foreground">Pomodoro</h1>
+        <h1 className="text-3xl font-heading font-bold text-foreground tracking-tight">Pomodoro</h1>
       </AnimatedSection>
 
       <AnimatedSection delay={0.1}>
-        <Card className="bg-card border-border">
-          <CardContent className="p-6 space-y-6">
+        <GlassCard variant="elevated" className="p-6 border-glow relative">
+          <ParticleBurst trigger={burst.trigger} count={28} />
+          <div className="space-y-6">
             <Select value={subject} onValueChange={setSubject}>
               <SelectTrigger><SelectValue placeholder="Chọn môn học (tùy chọn)" /></SelectTrigger>
               <SelectContent>
@@ -111,53 +114,46 @@ export default function PomodoroPage() {
               {(["focus", "short_break", "long_break"] as SessionType[]).map((t) => (
                 <Button key={t} variant={sessionType === t ? "default" : "outline"} size="sm"
                   onClick={() => switchSession(t)}
-                  className={sessionType === t ? "bg-accent text-accent-foreground" : ""}>
+                  className={sessionType === t ? "bg-accent text-accent-foreground rounded-full" : "rounded-full"}>
                   {LABELS[t]}
                 </Button>
               ))}
             </div>
 
-            <div className="flex justify-center">
-              <div className="relative w-52 h-52">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                  <circle cx="100" cy="100" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
-                  <circle cx="100" cy="100" r={radius} fill="none" stroke="hsl(var(--accent))" strokeWidth="8"
-                    strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.33, 1, 0.68, 1)" }} />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-4xl font-heading font-bold text-foreground">
-                    {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
-                  </span>
-                  <span className="text-xs text-muted-foreground mt-1">{LABELS[sessionType]}</span>
+            <div className="flex flex-col items-center gap-3">
+              <LiquidProgress value={progress} size={220} label={LABELS[sessionType]} />
+              <div className="text-center">
+                <div className="font-heading font-bold text-foreground text-3xl tabular-nums tracking-tight">
+                  {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
                 </div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-widest">còn lại</div>
               </div>
             </div>
 
             <div className="flex justify-center gap-3">
-              <Button variant="outline" size="icon" onClick={() => { setIsRunning(false); setTimeLeft(DURATIONS[sessionType]); }}>
+              <Button variant="outline" size="icon" className="rounded-full" onClick={() => { setIsRunning(false); setTimeLeft(DURATIONS[sessionType]); }}>
                 <RotateCcw className="w-4 h-4" />
               </Button>
-              <Button onClick={() => setIsRunning(!isRunning)} className="bg-accent text-accent-foreground hover:bg-accent/90 px-8">
+              <MagneticButton onClick={() => setIsRunning(!isRunning)} className="bg-accent text-accent-foreground hover:bg-accent/90 px-8 rounded-full">
                 {isRunning ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                 {isRunning ? "Tạm dừng" : "Bắt đầu"}
-              </Button>
+              </MagneticButton>
             </div>
 
             <p className="text-center text-xs text-muted-foreground">
               Phiên tập trung hôm nay: {todaySessions?.filter((s: any) => s.session_type === "focus").length || 0}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </GlassCard>
       </AnimatedSection>
 
       {todaySessions && todaySessions.length > 0 && (
         <AnimatedSection delay={0.2}>
-          <Card className="bg-card border-border">
-            <CardHeader><CardTitle className="text-base font-heading">Lịch sử hôm nay</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+          <GlassCard className="p-5">
+            <CardHeader className="p-0 pb-3"><CardTitle className="text-base font-heading">Lịch sử hôm nay</CardTitle></CardHeader>
+            <CardContent className="p-0 space-y-2">
               {todaySessions.map((s: any) => (
-                <div key={s.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
+                <div key={s.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-0">
                   <div className="flex items-center gap-2">
                     {s.session_type === "focus" ? <Clock className="w-3.5 h-3.5 text-accent" /> : <Coffee className="w-3.5 h-3.5 text-muted-foreground" />}
                     <span className="text-foreground">{s.subject || LABELS[s.session_type as SessionType]}</span>
@@ -166,7 +162,7 @@ export default function PomodoroPage() {
                 </div>
               ))}
             </CardContent>
-          </Card>
+          </GlassCard>
         </AnimatedSection>
       )}
     </div>
