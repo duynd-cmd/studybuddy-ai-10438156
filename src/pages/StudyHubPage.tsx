@@ -683,6 +683,70 @@ export default function StudyHubPage() {
           </div>
         )}
       </Card>
+
+      <Dialog open={embedOpen} onOpenChange={setEmbedOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Embed từ app vào workspace</DialogTitle>
+            <DialogDescription>
+              Chọn một ghi chú hoặc kế hoạch học để đính kèm làm context cho AI.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs defaultValue="notes">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="notes">
+                <NotebookPen className="w-4 h-4 mr-1.5" /> Ghi chú
+              </TabsTrigger>
+              <TabsTrigger value="plans">
+                <CalendarRange className="w-4 h-4 mr-1.5" /> Kế hoạch
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="notes" className="max-h-[50vh] overflow-y-auto space-y-1.5 mt-3">
+              {!userNotes?.length ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Chưa có ghi chú nào. Tạo ghi chú ở trang Ghi chú trước.
+                </p>
+              ) : (
+                userNotes.map((n: any) => (
+                  <button
+                    key={n.id}
+                    onClick={() => embedNote(n)}
+                    className="w-full text-left p-3 rounded border border-border hover:bg-accent/10 transition-colors"
+                  >
+                    <div className="font-medium text-sm">{n.title}</div>
+                    {n.subject && (
+                      <div className="text-xs text-muted-foreground">{n.subject}</div>
+                    )}
+                    <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                      {n.content || "(trống)"}
+                    </div>
+                  </button>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="plans" className="max-h-[50vh] overflow-y-auto space-y-1.5 mt-3">
+              {!userPlans?.length ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Chưa có kế hoạch nào. Tạo kế hoạch ở trang Kế hoạch học tập trước.
+                </p>
+              ) : (
+                userPlans.map((p: any) => (
+                  <button
+                    key={p.id}
+                    onClick={() => embedPlan(p)}
+                    className="w-full text-left p-3 rounded border border-border hover:bg-accent/10 transition-colors"
+                  >
+                    <div className="font-medium text-sm">{p.subject}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {p.duration} • {p.tasks?.length || 0} task • {p.status}
+                    </div>
+                  </button>
+                ))
+              )}
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
