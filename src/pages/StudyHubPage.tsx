@@ -89,8 +89,47 @@ export default function StudyHubPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: userNotes } = useQuery({
+    queryKey: ["study-hub-embed-notes", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from("notes")
+        .select("id, title, subject, content, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!user && embedOpen,
+  });
+
+  const { data: userPlans } = useQuery({
+    queryKey: ["study-hub-embed-plans", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data: plans } = await supabase
+        .from("study_plans")
+        .select("id, subject, duration, status, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!plans) return [];
+      const ids = plans.map((p) => p.id);
+      const { data: tasks } = await supabase
+        .from("study_tasks")
+        .select("plan_id, day_number, title, description, completed")
+        .in("plan_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
+        .order("day_number", { ascending: true });
+      return plans.map((p) => ({
+        ...p,
+        tasks: (tasks || []).filter((t) => t.plan_id === p.id),
+      }));
+    },
+    enabled: !!user && embedOpen,
+  });
 
   const { data: conversations } = useQuery({
     queryKey: ["study-hub-convos", user?.id],
