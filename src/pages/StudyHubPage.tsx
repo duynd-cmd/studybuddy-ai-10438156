@@ -17,9 +17,20 @@ import {
   Image as ImageIcon,
   Code2,
   Layers,
+  BookMarked,
+  NotebookPen,
+  CalendarRange,
 } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
