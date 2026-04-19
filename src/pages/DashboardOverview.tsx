@@ -1,6 +1,5 @@
 import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
-import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Clock, Target, Brain, HelpCircle, TrendingUp, Sparkles, Flame, BookOpen, ArrowRight } from "lucide-react";
 import { StaggerReveal } from "@/components/motion/StaggerReveal";
@@ -12,6 +11,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
+/**
+ * Bento grid rules:
+ * - 12 columns, 24px gap
+ * - All cards: p-6 internal padding, h-full, flex column
+ * - Header row (title) at top, body grows, action button pinned to bottom
+ */
 export default function DashboardOverview() {
   const { data: profile } = useProfile();
   const { user } = useAuth();
@@ -95,16 +100,21 @@ export default function DashboardOverview() {
     enabled: !!user,
   });
 
-  const accuracy = taskStats?.total
-    ? Math.round((taskStats.completed / taskStats.total) * 100)
-    : 0;
-
+  const accuracy = taskStats?.total ? Math.round((taskStats.completed / taskStats.total) * 100) : 0;
   const focusMinutes = pomodoroStats?.totalMinutes || 0;
   const focusSessions = pomodoroStats?.totalSessions || 0;
   const streakProgress = Math.min(100, (focusSessions % 10) * 10);
 
+  // Shared subcomponents to enforce identical baseline
+  const CardTitleRow = ({ icon: Icon, label }: { icon: any; label: string }) => (
+    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-semibold h-6">
+      <Icon className="w-4 h-4 text-accent" />
+      <span>{label}</span>
+    </div>
+  );
+
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Hero greeting */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -127,20 +137,24 @@ export default function DashboardOverview() {
         </div>
       </motion.div>
 
-      {/* BENTO GRID — strict 20px gap rhythm */}
-      <StaggerReveal className="grid grid-cols-1 md:grid-cols-6 gap-5 auto-rows-[minmax(140px,auto)]">
-        {/* Hero stat — Liquid progress */}
-        <TiltCard className="md:col-span-3 md:row-span-2" maxTilt={5}>
-          <GlassCard variant="elevated" className="h-full p-6 flex flex-col md:flex-row items-center gap-6 border-glow">
-            <LiquidProgress value={accuracy} size={160} label="Tiến độ" />
-            <div className="flex-1 space-y-3 text-center md:text-left">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">Độ chính xác tổng</p>
-                <p className="text-4xl font-heading font-bold text-foreground mt-1">{accuracy}%</p>
+      {/* BENTO GRID — strict 12 columns, 24px gap */}
+      <StaggerReveal className="grid grid-cols-12 gap-6 auto-rows-[180px]">
+        {/* Row 1 — Hero progress (8 cols × 2 rows) + Streak (4 cols × 1 row) + Focus mins (4 cols × 1 row) */}
+        <TiltCard className="col-span-12 md:col-span-8 row-span-2" maxTilt={3}>
+          <GlassCard variant="elevated" className="h-full p-6 flex flex-col border-glow">
+            <CardTitleRow icon={TrendingUp} label="Tiến độ tổng quan" />
+            <div className="flex-1 flex flex-col md:flex-row items-center gap-6 mt-4 min-h-0">
+              <div className="shrink-0 flex items-center justify-center">
+                <LiquidProgress value={accuracy} size={170} label="Tiến độ" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                {taskStats?.completed || 0} / {taskStats?.total || 0} nhiệm vụ đã hoàn thành
-              </p>
+              <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left min-w-0">
+                <p className="text-5xl font-heading font-bold text-foreground leading-none">{accuracy}%</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {taskStats?.completed || 0} / {taskStats?.total || 0} nhiệm vụ đã hoàn thành
+                </p>
+              </div>
+            </div>
+            <div className="pt-4 mt-auto">
               <MagneticButton
                 size="sm"
                 onClick={() => navigate("/dashboard/ke-hoach")}
@@ -152,104 +166,95 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        {/* Streak */}
-        <TiltCard className="md:col-span-3" maxTilt={6}>
-          <GlassCard variant="interactive" className="h-full p-5 relative overflow-hidden">
-            <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-accent/20 blur-2xl" />
-            <div className="relative flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-accent/20 flex items-center justify-center shrink-0 border border-accent/30">
-                <Flame className="w-7 h-7 text-foreground" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs uppercase tracking-widest text-muted-foreground">Chuỗi tập trung</p>
-                <p className="text-2xl font-heading font-bold text-foreground">{focusSessions} phiên</p>
-                <div className="mt-2 h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${streakProgress}%` }}
-                    transition={{ type: "spring", stiffness: 60, damping: 18, delay: 0.4 }}
-                    className="h-full bg-gradient-to-r from-accent to-accent/60 rounded-full"
-                  />
-                </div>
+        {/* Streak — 4 cols × 1 row */}
+        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-accent/20 blur-2xl pointer-events-none" />
+            <CardTitleRow icon={Flame} label="Chuỗi tập trung" />
+            <div className="flex-1 flex flex-col justify-center mt-3">
+              <p className="text-3xl font-heading font-bold text-foreground leading-none">{focusSessions}</p>
+              <p className="text-xs text-muted-foreground mt-1">phiên hoàn thành</p>
+              <div className="mt-3 h-1.5 rounded-full bg-muted/50 overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${streakProgress}%` }}
+                  transition={{ type: "spring", stiffness: 60, damping: 18, delay: 0.3 }}
+                  className="h-full bg-gradient-to-r from-accent to-accent/60 rounded-full"
+                />
               </div>
             </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Mini stats — focus minutes */}
-        <TiltCard className="md:col-span-2" maxTilt={6}>
-          <GlassCard variant="interactive" className="h-full p-5">
-            <Clock className="w-5 h-5 text-accent mb-2" />
-            <p className="text-2xl font-heading font-bold text-foreground">{focusMinutes}</p>
-            <p className="text-xs text-muted-foreground">Phút tập trung</p>
+        {/* Focus minutes — 4 cols × 1 row */}
+        <TiltCard className="col-span-6 md:col-span-2" maxTilt={4}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <CardTitleRow icon={Clock} label="Phút" />
+            <div className="flex-1 flex flex-col justify-center mt-3">
+              <p className="text-3xl font-heading font-bold text-foreground leading-none">{focusMinutes}</p>
+              <p className="text-xs text-muted-foreground mt-1">tập trung</p>
+            </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Mini stats — questions */}
-        <TiltCard className="md:col-span-1 hidden md:block" maxTilt={6}>
-          <GlassCard variant="interactive" className="h-full p-5">
-            <HelpCircle className="w-5 h-5 text-accent mb-2" />
-            <p className="text-2xl font-heading font-bold text-foreground">{messageCount || 0}</p>
-            <p className="text-xs text-muted-foreground">Câu hỏi đã hỏi</p>
+        {/* Questions — 2 cols × 1 row */}
+        <TiltCard className="col-span-6 md:col-span-2" maxTilt={4}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <CardTitleRow icon={HelpCircle} label="Câu hỏi" />
+            <div className="flex-1 flex flex-col justify-center mt-3">
+              <p className="text-3xl font-heading font-bold text-foreground leading-none">{messageCount || 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">đã hỏi</p>
+            </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Plan card */}
-        <TiltCard className="md:col-span-3" maxTilt={5}>
-          <GlassCard variant="interactive" className="h-full p-5">
-            <CardHeader className="p-0 pb-3">
-              <CardTitle className="text-sm font-heading flex items-center gap-2 text-muted-foreground uppercase tracking-widest">
-                <BookOpen className="w-4 h-4" /> Lộ trình hiện tại
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
+        {/* Row 2 — Plan (6) + Recent notes (6) */}
+        <TiltCard className="col-span-12 md:col-span-6 row-span-2" maxTilt={3}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <CardTitleRow icon={BookOpen} label="Lộ trình hiện tại" />
+            <div className="flex-1 flex flex-col mt-4 min-h-0">
               {activePlan ? (
-                <div className="space-y-3">
-                  <p className="text-lg font-heading font-bold text-foreground">{activePlan.subject}</p>
-                  <p className="text-sm text-muted-foreground">
+                <>
+                  <p className="text-xl font-heading font-bold text-foreground">{activePlan.subject}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
                     {(activePlan as any).study_tasks?.filter((t: any) => t.completed).length || 0}/
                     {(activePlan as any).study_tasks?.length || 0} nhiệm vụ
                   </p>
-                  <MagneticButton
-                    size="sm"
-                    onClick={() => navigate("/dashboard/ke-hoach")}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full"
-                  >
-                    Tiếp tục học <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                  </MagneticButton>
-                </div>
+                </>
               ) : (
-                <div className="text-center py-4">
-                  <Brain className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground mb-3">Chưa có lộ trình nào</p>
-                  <MagneticButton
-                    size="sm"
-                    onClick={() => navigate("/dashboard/ke-hoach")}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full"
-                  >
-                    Tạo lộ trình AI
-                  </MagneticButton>
+                <div className="flex-1 flex flex-col items-center justify-center text-center">
+                  <Brain className="w-10 h-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">Chưa có lộ trình nào</p>
                 </div>
               )}
-            </CardContent>
+            </div>
+            <div className="pt-4 mt-auto">
+              <MagneticButton
+                size="sm"
+                onClick={() => navigate("/dashboard/ke-hoach")}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full"
+              >
+                {activePlan ? "Tiếp tục học" : "Tạo lộ trình AI"} <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </MagneticButton>
+            </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Recent notes */}
-        <TiltCard className="md:col-span-3" maxTilt={5}>
-          <GlassCard variant="interactive" className="h-full p-5">
-            <CardHeader className="p-0 pb-3 flex-row items-center justify-between">
-              <CardTitle className="text-sm font-heading flex items-center gap-2 text-muted-foreground uppercase tracking-widest">
-                <Target className="w-4 h-4" /> Ghi chú gần đây
-              </CardTitle>
+        <TiltCard className="col-span-12 md:col-span-6 row-span-2" maxTilt={3}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <div className="flex items-center justify-between h-6">
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+                <Target className="w-4 h-4 text-accent" />
+                <span>Ghi chú gần đây</span>
+              </div>
               <button
                 onClick={() => navigate("/dashboard/ghi-chu")}
-                className="text-xs text-accent-foreground/70 hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Tất cả →
               </button>
-            </CardHeader>
-            <CardContent className="p-0 space-y-2">
+            </div>
+            <div className="flex-1 flex flex-col mt-4 space-y-2 min-h-0 overflow-y-auto">
               {recentNotes && recentNotes.length > 0 ? (
                 recentNotes.map((n: any) => (
                   <button
@@ -257,72 +262,74 @@ export default function DashboardOverview() {
                     onClick={() => navigate("/dashboard/ghi-chu")}
                     className="w-full text-left p-3 rounded-lg bg-secondary/40 hover:bg-secondary/70 transition-colors group"
                   >
-                    <p className="text-sm font-medium text-foreground truncate group-hover:text-foreground">
-                      {n.title}
-                    </p>
-                    {n.subject && (
-                      <p className="text-xs text-muted-foreground mt-0.5">{n.subject}</p>
-                    )}
+                    <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
+                    {n.subject && <p className="text-xs text-muted-foreground mt-0.5">{n.subject}</p>}
                   </button>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground py-4 text-center">Chưa có ghi chú nào</p>
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-sm text-muted-foreground">Chưa có ghi chú nào</p>
+                </div>
               )}
-            </CardContent>
+            </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Quick action — Pomodoro */}
-        <TiltCard className="md:col-span-2" maxTilt={6}>
-          <GlassCard variant="interactive" className="h-full p-5 flex flex-col justify-between">
-            <div>
-              <Clock className="w-5 h-5 text-accent mb-2" />
-              <p className="text-sm font-heading font-bold text-foreground">Bắt đầu Pomodoro</p>
-              <p className="text-xs text-muted-foreground mt-1">25 phút tập trung</p>
+        {/* Row 3 — Three quick actions, equal width */}
+        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <CardTitleRow icon={Clock} label="Pomodoro" />
+            <div className="flex-1 flex flex-col mt-3">
+              <p className="text-base font-heading font-bold text-foreground">Bắt đầu phiên 25 phút</p>
+              <p className="text-xs text-muted-foreground mt-1">Tập trung sâu</p>
             </div>
-            <MagneticButton
-              size="sm"
-              onClick={() => navigate("/dashboard/pomodoro")}
-              className="mt-3 bg-accent text-accent-foreground hover:bg-accent/90 rounded-full w-full"
-            >
-              Bắt đầu
-            </MagneticButton>
+            <div className="pt-4 mt-auto">
+              <MagneticButton
+                size="sm"
+                onClick={() => navigate("/dashboard/pomodoro")}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full w-full"
+              >
+                Bắt đầu
+              </MagneticButton>
+            </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Quick action — Scriba */}
-        <TiltCard className="md:col-span-2" maxTilt={6}>
-          <GlassCard variant="interactive" className="h-full p-5 flex flex-col justify-between">
-            <div>
-              <Brain className="w-5 h-5 text-accent mb-2" />
-              <p className="text-sm font-heading font-bold text-foreground">Hỏi Scriba AI</p>
-              <p className="text-xs text-muted-foreground mt-1">Trợ lý học tập</p>
+        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <CardTitleRow icon={Brain} label="Scriba AI" />
+            <div className="flex-1 flex flex-col mt-3">
+              <p className="text-base font-heading font-bold text-foreground">Hỏi trợ lý AI</p>
+              <p className="text-xs text-muted-foreground mt-1">Giải đáp tức thì</p>
             </div>
-            <MagneticButton
-              size="sm"
-              onClick={() => navigate("/dashboard/scriba")}
-              className="mt-3 bg-foreground text-primary-foreground hover:bg-foreground/90 rounded-full w-full"
-            >
-              Mở chat
-            </MagneticButton>
+            <div className="pt-4 mt-auto">
+              <MagneticButton
+                size="sm"
+                onClick={() => navigate("/dashboard/scriba")}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full w-full"
+              >
+                Mở chat
+              </MagneticButton>
+            </div>
           </GlassCard>
         </TiltCard>
 
-        {/* Quick action — Plan */}
-        <TiltCard className="md:col-span-2" maxTilt={6}>
-          <GlassCard variant="interactive" className="h-full p-5 flex flex-col justify-between">
-            <div>
-              <TrendingUp className="w-5 h-5 text-accent mb-2" />
-              <p className="text-sm font-heading font-bold text-foreground">Tạo kế hoạch</p>
-              <p className="text-xs text-muted-foreground mt-1">AI lập lộ trình mới</p>
+        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+          <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
+            <CardTitleRow icon={TrendingUp} label="Kế hoạch mới" />
+            <div className="flex-1 flex flex-col mt-3">
+              <p className="text-base font-heading font-bold text-foreground">AI lập lộ trình</p>
+              <p className="text-xs text-muted-foreground mt-1">Cá nhân hoá theo bạn</p>
             </div>
-            <MagneticButton
-              size="sm"
-              onClick={() => navigate("/dashboard/ke-hoach")}
-              className="mt-3 bg-accent text-accent-foreground hover:bg-accent/90 rounded-full w-full"
-            >
-              Tạo ngay
-            </MagneticButton>
+            <div className="pt-4 mt-auto">
+              <MagneticButton
+                size="sm"
+                onClick={() => navigate("/dashboard/ke-hoach")}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full w-full"
+              >
+                Tạo ngay
+              </MagneticButton>
+            </div>
           </GlassCard>
         </TiltCard>
       </StaggerReveal>
