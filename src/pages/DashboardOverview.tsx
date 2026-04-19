@@ -104,7 +104,7 @@ export default function DashboardOverview() {
   const streakProgress = Math.min(100, (focusSessions % 10) * 10);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
       {/* Hero greeting */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -127,8 +127,8 @@ export default function DashboardOverview() {
         </div>
       </motion.div>
 
-      {/* BENTO GRID */}
-      <StaggerReveal className="grid grid-cols-1 md:grid-cols-6 gap-4 auto-rows-[minmax(140px,auto)]">
+      {/* BENTO GRID — strict 20px gap rhythm */}
+      <StaggerReveal className="grid grid-cols-1 md:grid-cols-6 gap-5 auto-rows-[minmax(140px,auto)]">
         {/* Hero stat — Liquid progress */}
         <TiltCard className="md:col-span-3 md:row-span-2" maxTilt={5}>
           <GlassCard variant="elevated" className="h-full p-6 flex flex-col md:flex-row items-center gap-6 border-glow">
@@ -142,10 +142,11 @@ export default function DashboardOverview() {
                 {taskStats?.completed || 0} / {taskStats?.total || 0} nhiệm vụ đã hoàn thành
               </p>
               <MagneticButton
+                size="sm"
                 onClick={() => navigate("/dashboard/ke-hoach")}
                 className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full"
               >
-                Xem lộ trình <ArrowRight className="w-4 h-4 ml-1" />
+                Xem lộ trình <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </MagneticButton>
             </div>
           </GlassCard>
@@ -176,7 +177,7 @@ export default function DashboardOverview() {
         </TiltCard>
 
         {/* Mini stats — focus minutes */}
-        <TiltCard className="md:col-span-1.5 md:col-span-2" maxTilt={6}>
+        <TiltCard className="md:col-span-2" maxTilt={6}>
           <GlassCard variant="interactive" className="h-full p-5">
             <Clock className="w-5 h-5 text-accent mb-2" />
             <p className="text-2xl font-heading font-bold text-foreground">{focusMinutes}</p>
@@ -185,7 +186,7 @@ export default function DashboardOverview() {
         </TiltCard>
 
         {/* Mini stats — questions */}
-        <TiltCard className="md:col-span-1" maxTilt={6}>
+        <TiltCard className="md:col-span-1 hidden md:block" maxTilt={6}>
           <GlassCard variant="interactive" className="h-full p-5">
             <HelpCircle className="w-5 h-5 text-accent mb-2" />
             <p className="text-2xl font-heading font-bold text-foreground">{messageCount || 0}</p>
@@ -212,7 +213,7 @@ export default function DashboardOverview() {
                   <MagneticButton
                     size="sm"
                     onClick={() => navigate("/dashboard/ke-hoach")}
-                    className="bg-foreground text-primary-foreground hover:bg-foreground/90 rounded-full"
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 rounded-full"
                   >
                     Tiếp tục học <ArrowRight className="w-3.5 h-3.5 ml-1" />
                   </MagneticButton>
