@@ -6,22 +6,22 @@
   :root {
     /* AI-Mentor Design System */
     --background: 39 38% 91%;       /* #EFE9D5 */
-    --foreground: 206 22% 33%;      /* #536471 */
+    --foreground: 138 28% 15%;      /* #1B3022 - high contrast dark green */
 
     --card: 39 38% 94%;
-    --card-foreground: 206 22% 33%;
+    --card-foreground: 138 28% 15%;
 
     --popover: 39 38% 94%;
-    --popover-foreground: 206 22% 33%;
+    --popover-foreground: 138 28% 15%;
 
-    --primary: 206 22% 33%;         /* #536471 - text/primary */
+    --primary: 138 28% 15%;         /* #1B3022 - text/primary */
     --primary-foreground: 39 38% 91%;
 
     --secondary: 39 30% 85%;
-    --secondary-foreground: 206 22% 33%;
+    --secondary-foreground: 138 28% 15%;
 
     --muted: 39 25% 87%;
-    --muted-foreground: 206 15% 50%;
+    --muted-foreground: 138 15% 30%;
 
     --accent: 88 100% 72%;          /* #C1FF72 */
     --accent-foreground: 206 30% 20%;
