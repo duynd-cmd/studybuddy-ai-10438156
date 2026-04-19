@@ -12,10 +12,11 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 /**
- * Bento grid rules:
- * - 12 columns, 24px gap
- * - All cards: p-6 internal padding, h-full, flex column
- * - Header row (title) at top, body grows, action button pinned to bottom
+ * Bento rules:
+ * - Mobile: 1 column stack
+ * - Tablet (md): 2-column simple grid
+ * - Desktop (lg+): 12-column strict Bento
+ * - 24px gap, p-6 padding, h-full + flex-col, action pinned via mt-auto
  */
 export default function DashboardOverview() {
   const { data: profile } = useProfile();
@@ -105,11 +106,10 @@ export default function DashboardOverview() {
   const focusSessions = pomodoroStats?.totalSessions || 0;
   const streakProgress = Math.min(100, (focusSessions % 10) * 10);
 
-  // Shared subcomponents to enforce identical baseline
   const CardTitleRow = ({ icon: Icon, label }: { icon: any; label: string }) => (
-    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-semibold h-6">
-      <Icon className="w-4 h-4 text-accent" />
-      <span>{label}</span>
+    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-semibold h-6 whitespace-nowrap">
+      <Icon className="w-4 h-4 text-accent shrink-0" />
+      <span className="truncate">{label}</span>
     </div>
   );
 
@@ -120,34 +120,34 @@ export default function DashboardOverview() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 280, damping: 30 }}
-        className="flex items-center justify-between"
+        className="flex items-center justify-between gap-4"
       >
-        <div>
+        <div className="min-w-0">
           <h1 className="text-3xl md:text-4xl font-heading font-bold text-foreground tracking-tight">
             Xin chào! <span className="inline-block animate-pulse">👋</span>
           </h1>
-          <p className="text-muted-foreground mt-1.5 text-sm">
+          <p className="text-muted-foreground mt-1.5 text-sm truncate">
             {profile?.grade && `${profile.grade} · `}
             {profile?.goal || "Hãy bắt đầu hành trình học tập thông minh!"}
           </p>
         </div>
-        <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground glass px-3 py-1.5 rounded-full">
+        <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground glass px-3 py-1.5 rounded-full shrink-0">
           <Sparkles className="w-3.5 h-3.5 text-accent" />
           <span>AI-Mentor 2026</span>
         </div>
       </motion.div>
 
-      {/* BENTO GRID — strict 12 columns, 24px gap */}
-      <StaggerReveal className="grid grid-cols-12 gap-6 auto-rows-[180px]">
-        {/* Row 1 — Hero progress (8 cols × 2 rows) + Streak (4 cols × 1 row) + Focus mins (4 cols × 1 row) */}
-        <TiltCard className="col-span-12 md:col-span-8 row-span-2" maxTilt={3}>
-          <GlassCard variant="elevated" className="h-full p-6 flex flex-col border-glow">
+      {/* BENTO GRID */}
+      <StaggerReveal className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 auto-rows-[minmax(180px,auto)]">
+        {/* HERO progress — wide card, 2 rows on desktop */}
+        <TiltCard className="md:col-span-2 lg:col-span-8 lg:row-span-2" maxTilt={3}>
+          <GlassCard variant="elevated" className="h-full p-6 flex flex-col border-glow overflow-hidden">
             <CardTitleRow icon={TrendingUp} label="Tiến độ tổng quan" />
-            <div className="flex-1 flex flex-col md:flex-row items-center gap-6 mt-4 min-h-0">
-              <div className="shrink-0 flex items-center justify-center">
-                <LiquidProgress value={accuracy} size={170} label="Tiến độ" />
+            <div className="flex-1 flex flex-col sm:flex-row items-center gap-6 mt-4 min-h-0">
+              <div className="shrink-0">
+                <LiquidProgress value={accuracy} size={160} label="Tiến độ" />
               </div>
-              <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left min-w-0">
+              <div className="flex-1 flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
                 <p className="text-5xl font-heading font-bold text-foreground leading-none">{accuracy}%</p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {taskStats?.completed || 0} / {taskStats?.total || 0} nhiệm vụ đã hoàn thành
@@ -166,13 +166,13 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        {/* Streak — 4 cols × 1 row */}
-        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+        {/* Streak */}
+        <TiltCard className="lg:col-span-4" maxTilt={4}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col relative overflow-hidden">
             <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-accent/20 blur-2xl pointer-events-none" />
             <CardTitleRow icon={Flame} label="Chuỗi tập trung" />
-            <div className="flex-1 flex flex-col justify-center mt-3">
-              <p className="text-3xl font-heading font-bold text-foreground leading-none">{focusSessions}</p>
+            <div className="flex-1 flex flex-col justify-center mt-3 relative">
+              <p className="text-4xl font-heading font-bold text-foreground leading-none">{focusSessions}</p>
               <p className="text-xs text-muted-foreground mt-1">phiên hoàn thành</p>
               <div className="mt-3 h-1.5 rounded-full bg-muted/50 overflow-hidden">
                 <motion.div
@@ -186,8 +186,8 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        {/* Focus minutes — 4 cols × 1 row */}
-        <TiltCard className="col-span-6 md:col-span-2" maxTilt={4}>
+        {/* Focus minutes */}
+        <TiltCard className="lg:col-span-2" maxTilt={4}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <CardTitleRow icon={Clock} label="Phút" />
             <div className="flex-1 flex flex-col justify-center mt-3">
@@ -197,8 +197,8 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        {/* Questions — 2 cols × 1 row */}
-        <TiltCard className="col-span-6 md:col-span-2" maxTilt={4}>
+        {/* Questions */}
+        <TiltCard className="lg:col-span-2" maxTilt={4}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <CardTitleRow icon={HelpCircle} label="Câu hỏi" />
             <div className="flex-1 flex flex-col justify-center mt-3">
@@ -208,14 +208,14 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        {/* Row 2 — Plan (6) + Recent notes (6) */}
-        <TiltCard className="col-span-12 md:col-span-6 row-span-2" maxTilt={3}>
+        {/* Plan */}
+        <TiltCard className="md:col-span-2 lg:col-span-6 lg:row-span-2" maxTilt={3}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <CardTitleRow icon={BookOpen} label="Lộ trình hiện tại" />
             <div className="flex-1 flex flex-col mt-4 min-h-0">
               {activePlan ? (
                 <>
-                  <p className="text-xl font-heading font-bold text-foreground">{activePlan.subject}</p>
+                  <p className="text-xl font-heading font-bold text-foreground truncate">{activePlan.subject}</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     {(activePlan as any).study_tasks?.filter((t: any) => t.completed).length || 0}/
                     {(activePlan as any).study_tasks?.length || 0} nhiệm vụ
@@ -240,16 +240,17 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        <TiltCard className="col-span-12 md:col-span-6 row-span-2" maxTilt={3}>
+        {/* Recent notes */}
+        <TiltCard className="md:col-span-2 lg:col-span-6 lg:row-span-2" maxTilt={3}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <div className="flex items-center justify-between h-6">
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground font-semibold whitespace-nowrap">
                 <Target className="w-4 h-4 text-accent" />
                 <span>Ghi chú gần đây</span>
               </div>
               <button
                 onClick={() => navigate("/dashboard/ghi-chu")}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
               >
                 Tất cả →
               </button>
@@ -263,7 +264,7 @@ export default function DashboardOverview() {
                     className="w-full text-left p-3 rounded-lg bg-secondary/40 hover:bg-secondary/70 transition-colors group"
                   >
                     <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
-                    {n.subject && <p className="text-xs text-muted-foreground mt-0.5">{n.subject}</p>}
+                    {n.subject && <p className="text-xs text-muted-foreground mt-0.5 truncate">{n.subject}</p>}
                   </button>
                 ))
               ) : (
@@ -275,12 +276,12 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        {/* Row 3 — Three quick actions, equal width */}
-        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+        {/* Quick actions row */}
+        <TiltCard className="lg:col-span-4" maxTilt={4}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <CardTitleRow icon={Clock} label="Pomodoro" />
             <div className="flex-1 flex flex-col mt-3">
-              <p className="text-base font-heading font-bold text-foreground">Bắt đầu phiên 25 phút</p>
+              <p className="text-base font-heading font-bold text-foreground">Phiên 25 phút</p>
               <p className="text-xs text-muted-foreground mt-1">Tập trung sâu</p>
             </div>
             <div className="pt-4 mt-auto">
@@ -295,7 +296,7 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+        <TiltCard className="lg:col-span-4" maxTilt={4}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <CardTitleRow icon={Brain} label="Scriba AI" />
             <div className="flex-1 flex flex-col mt-3">
@@ -314,7 +315,7 @@ export default function DashboardOverview() {
           </GlassCard>
         </TiltCard>
 
-        <TiltCard className="col-span-12 md:col-span-4" maxTilt={4}>
+        <TiltCard className="md:col-span-2 lg:col-span-4" maxTilt={4}>
           <GlassCard variant="interactive" className="h-full p-6 flex flex-col">
             <CardTitleRow icon={TrendingUp} label="Kế hoạch mới" />
             <div className="flex-1 flex flex-col mt-3">
